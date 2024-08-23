@@ -35,6 +35,10 @@ Run the flask app:
 ```
 flask run
 ```
+or
+```
+flask --app flask_server/flask_server.py run
+```
 
 By default it should run on port 5000.
 
