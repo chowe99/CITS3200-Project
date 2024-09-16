@@ -1,5 +1,5 @@
 # app/blueprints/main.py
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, jsonify
 import pandas as pd
 import sqlite3
 import matplotlib.pyplot as plt
@@ -8,7 +8,6 @@ import base64
 
 main = Blueprint('main', __name__)
 
-# Example database connection setup
 DATABASE_PATH = 'app/database/data.db'
 
 @main.route('/')
@@ -23,7 +22,7 @@ def home():
     columns = df.columns.tolist()
 
     # Define potential X-axis options (e.g., time columns)
-    x_axis_options = [col for col in columns if "Time" in col or "Sec" in col or "hours" in col]
+    x_axis_options = [col for col in columns if "time_start_of_stage" in col or "Sec" in col or "hours" in col]
 
     # Define potential Y-axis options (e.g., pressure, volume, strain)
     y_axis_options = [col for col in columns if col not in x_axis_options]
@@ -55,9 +54,10 @@ def plot():
     buf.seek(0)
     plt.close()
 
-    # Convert to base64 to display directly in the HTML
+    # Convert to base64 to send directly in the JSON response
     plot_url = base64.b64encode(buf.getvalue()).decode('utf-8')
     plot_url = f"data:image/png;base64,{plot_url}"
 
-    return render_template('home.html', plot_url=plot_url, columns=selected_columns)
+    # Return the plot URL as a JSON response
+    return jsonify({"plot_url": plot_url})
 
