@@ -5,6 +5,7 @@ import sqlite3
 import matplotlib.pyplot as plt
 import io
 import base64
+import csv
 
 main = Blueprint('main', __name__)
 
@@ -33,7 +34,7 @@ def home():
 def plot():
     selected_columns = request.form.getlist('columns')
     x_axis = request.form['x_axis']
-    y_axis = request.form['y_axis']
+    y_axis = request.form.getlist('y_axis')  # Allow multiple Y-axes
 
     # Query the selected columns from the database
     conn = sqlite3.connect(DATABASE_PATH)
@@ -43,10 +44,12 @@ def plot():
 
     # Generate plot
     plt.figure(figsize=(10, 6))
-    plt.plot(df[x_axis], df[y_axis], marker='o')
+    for y in y_axis:
+        plt.plot(df[x_axis], df[y], marker='o', label=y)
     plt.xlabel(x_axis)
-    plt.ylabel(y_axis)
+    plt.ylabel(', '.join(y_axis))
     plt.title('User-Generated Plot')
+    plt.legend()
 
     # Save plot to a bytes buffer
     buf = io.BytesIO()
@@ -60,4 +63,52 @@ def plot():
 
     # Return the plot URL as a JSON response
     return jsonify({"plot_url": plot_url})
+
+@main.route('/add-column', methods=['POST'])
+def add_column():
+    column_name = request.form['column_name']
+    column_type = request.form['column_type']
+    column_data = request.form.get('column_data', '')
+    file = request.files.get('column_file')
+
+    # Validate column name and type
+    if not column_name or not column_type:
+        return jsonify({"message": "Column name and type are required.", "success": False})
+
+    # Prepare data from textarea or CSV file
+    data_list = []
+    if file:
+        # Read data from uploaded CSV file
+        file_data = file.read().decode('utf-8')
+        reader = csv.reader(file_data.splitlines())
+        data_list = [row[0] for row in reader]
+    elif column_data:
+        # Read data from the textarea, split by commas
+        data_list = column_data.split(',')
+
+    # Convert data to the appropriate type
+    if column_type == 'INTEGER':
+        data_list = [int(value) for value in data_list]
+    elif column_type == 'REAL':
+        data_list = [float(value) for value in data_list]
+    else:
+        data_list = [str(value) for value in data_list]
+
+    # Add the new column to the database
+    conn = sqlite3.connect(DATABASE_PATH)
+    try:
+        # Add column to the table
+        conn.execute(f"ALTER TABLE CSL_1_U ADD COLUMN {column_name} {column_type}")
+
+        # Insert data into the new column
+        for i, value in enumerate(data_list):
+            conn.execute(f"UPDATE CSL_1_U SET {column_name} = ? WHERE rowid = ?", (value, i + 1))
+
+        conn.commit()
+        return jsonify({"message": f"Column '{column_name}' added successfully!", "success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Error adding column: {str(e)}", "success": False})
+    finally:
+        conn.close()
 

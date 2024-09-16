@@ -12,7 +12,6 @@
     <form id="plot-form">
         <div>
             <h3>Select Columns to Query:</h3>
-            <!-- Checkboxes populated dynamically by backend -->
             {% for column in columns %}
                 <input type="checkbox" name="columns" value="{{ column }}"> {{ column }}<br>
             {% endfor %}
@@ -21,7 +20,6 @@
         <div>
             <h3>Select X-Axis:</h3>
             <select name="x_axis">
-                <!-- Populated dynamically based on columns available -->
                 {% for column in x_axis_options %}
                     <option value="{{ column }}">{{ column }}</option>
                 {% endfor %}
@@ -29,13 +27,12 @@
         </div>
 
         <div>
-            <h3>Select Y-Axis:</h3>
-            <select name="y_axis">
-                <!-- Populated dynamically based on columns available -->
+            <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
+            <div>
                 {% for column in y_axis_options %}
-                    <option value="{{ column }}">{{ column }}</option>
+                    <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column }}<br>
                 {% endfor %}
-            </select>
+            </div>
         </div>
 
         <button type="submit">Generate Plot</button>
@@ -47,31 +44,34 @@
         <img id="plot-image" src="" alt="Generated Plot" style="display: none;">
     </div>
 
-    <script>
-        // JavaScript to handle the form submission and update the plot dynamically
-        document.getElementById('plot-form').addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent the default form submission
+    <!-- Button to open the add column modal -->
+    <button id="add-column-btn">Add New Column</button>
 
-            // Create a FormData object to send form data via AJAX
-            const formData = new FormData(event.target);
+    <!-- Modal for adding a new column -->
+    <div id="add-column-modal" style="display: none;">
+        <h2>Add a New Column</h2>
+        <form id="add-column-form">
+            <label for="column-name">Column Name:</label>
+            <input type="text" id="column-name" name="column_name" required><br>
 
-            // Use Fetch API to send a POST request to the /plot endpoint
-            fetch('/plot', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(response => response.json()) // Expect a JSON response from the server
-            .then(data => {
-                if (data.plot_url) {
-                    // Update the plot image with the new plot URL
-                    const plotImage = document.getElementById('plot-image');
-                    plotImage.src = data.plot_url;
-                    plotImage.style.display = 'block';
-                }
-            })
-            .catch(error => console.error('Error:', error));
-        });
-    </script>
+            <label for="column-type">Column Data Type:</label>
+            <select id="column-type" name="column_type" required>
+                <option value="INTEGER">INTEGER</option>
+                <option value="REAL">REAL</option>
+                <option value="TEXT">TEXT</option>
+            </select><br>
+
+            <label for="column-data">Enter Data (comma-separated) or Upload CSV:</label>
+            <textarea id="column-data" name="column_data"></textarea><br>
+            <input type="file" id="column-file" name="column_file" accept=".csv"><br>
+
+            <button type="submit">Add Column</button>
+            <button type="button" id="close-modal">Cancel</button>
+        </form>
+    </div>
+
+    <!-- Link to external JavaScript file -->
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
 </body>
 </html>
 
