@@ -21,6 +21,7 @@ myresult = mycursor.fetchall()
 
 #create dataframe with pandas and plot with pyplot
 df = pd.DataFrame(myresult, columns=['p', 'q'])
+#create pandas dataframe and plot with pyplot
 df.plot(kind='scatter', x='p', y='q')
 plt.xlabel("p'")
 plt.ylabel('q')
