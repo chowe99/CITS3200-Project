@@ -55,9 +55,17 @@ def load_table():
         # Fetch column names based on the selected table
         columns = get_columns(table_name)
 
-        # Define potential X-axis and Y-axis options
-        x_axis_options = [col for col in columns if "time_start_of_stage" in col or "Sec" in col or "hours" in col]
-        y_axis_options = [col for col in columns if col not in x_axis_options]
+        # Define potential X-axis options (e.g., time columns, axial strain, mean effective stress)
+        x_axis_options = [
+            col for col in columns if "time_start_of_stage" in col or "Sec" in col or 
+            "hours" in col or "axial_strain" in col or "axial strain" in col or 
+            "p'" in col or "Mean Effective Stress" in col
+        ]
+
+        # Define potential Y-axis options (e.g., pressures, displacements, volumes, strains)
+        y_axis_options = [
+            col for col in columns if col not in x_axis_options
+        ]
 
         debug_print(f"X-axis options: {x_axis_options}")
         debug_print(f"Y-axis options: {y_axis_options}")
