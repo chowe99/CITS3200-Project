@@ -1,4 +1,5 @@
 # app/blueprints/main.py
+import logging
 from flask import Blueprint, render_template, request, jsonify
 import pandas as pd
 import sqlite3
@@ -7,65 +8,123 @@ import io
 import base64
 import csv
 
+# Set up basic logging configuration
+logging.basicConfig(level=logging.DEBUG)  # Set logging level to debug
+DEBUG = True  # Toggle this to enable or disable debugging print statements
+
+def debug_print(message):
+    """Prints debug messages if DEBUG is enabled."""
+    if DEBUG:
+        logging.debug(message)  # Use logging to print debug messages
+
 main = Blueprint('main', __name__)
 
 DATABASE_PATH = 'app/database/data.db'
 
-@main.route('/')
-def home():
-    # Connect to database to get column names dynamically
+
+def get_tables():
+    """Retrieve all table names from the database."""
     conn = sqlite3.connect(DATABASE_PATH)
-    query = "SELECT * FROM CSL_1_U LIMIT 1"  # Adjust your table name here
+    query = "SELECT name FROM sqlite_master WHERE type='table';"
+    tables = [row[0] for row in conn.execute(query).fetchall()]
+    conn.close()
+    debug_print(f"Available tables: {tables}")
+    return tables
+
+def get_columns(table_name):
+    """Retrieve column names from the selected table."""
+    conn = sqlite3.connect(DATABASE_PATH)
+    query = f"SELECT * FROM {table_name} LIMIT 1"
     df = pd.read_sql_query(query, conn)
     conn.close()
+    debug_print(f"Columns in table '{table_name}': {df.columns.tolist()}")
+    return df.columns.tolist()
 
-    # Extract column names
-    columns = df.columns.tolist()
+@main.route('/')
+def home():
+    # Get all available tables from the database
+    tables = get_tables()
+    return render_template('home.html', tables=tables)
 
-    # Define potential X-axis options (e.g., time columns)
-    x_axis_options = [col for col in columns if "time_start_of_stage" in col or "Sec" in col or "hours" in col]
+@main.route('/load-table', methods=['POST'])
+def load_table():
+    table_name = request.form['table_name']
+    debug_print(f"Loading table: {table_name}")
 
-    # Define potential Y-axis options (e.g., pressure, volume, strain)
-    y_axis_options = [col for col in columns if col not in x_axis_options]
+    try:
+        # Fetch column names based on the selected table
+        columns = get_columns(table_name)
 
-    return render_template('home.html', columns=columns, x_axis_options=x_axis_options, y_axis_options=y_axis_options)
+        # Define potential X-axis and Y-axis options
+        x_axis_options = [col for col in columns if "time_start_of_stage" in col or "Sec" in col or "hours" in col]
+        y_axis_options = [col for col in columns if col not in x_axis_options]
+
+        debug_print(f"X-axis options: {x_axis_options}")
+        debug_print(f"Y-axis options: {y_axis_options}")
+
+        return jsonify({
+            "success": True,
+            "x_axis_options": x_axis_options,
+            "y_axis_options": y_axis_options
+        })
+
+    except Exception as e:
+        debug_print(f"Error loading table: {str(e)}")
+        return jsonify({"success": False, "message": f"Error loading table: {str(e)}"})
 
 @main.route('/plot', methods=['POST'])
 def plot():
-    x_axis = request.form['x_axis']
-    y_axis = request.form.getlist('y_axis')  # Get selected Y-axis columns
+    try:
+        table_name = request.form.get('table_name')
+        x_axis = request.form.get('x_axis')
+        y_axis = request.form.getlist('y_axis')
 
-    # Check if Y-axis columns are selected
-    if not y_axis:
-        return jsonify({"error": "Please select at least one column for the Y-axis."})
+        if not table_name:
+            debug_print("Table name is missing from the request.")
+            return jsonify({"error": "Table name is missing from the request."}), 400
 
-    # Query the selected X and Y-axis columns from the database
-    conn = sqlite3.connect(DATABASE_PATH)
-    query = f"SELECT {x_axis}, {', '.join(y_axis)} FROM CSL_1_U"  # Adjust your table name
-    df = pd.read_sql_query(query, conn)
-    conn.close()
+        if not x_axis:
+            debug_print("X-axis field is missing from the request.")
+            return jsonify({"error": "X-axis field is missing from the request."}), 400
 
-    # Generate plot
-    plt.figure(figsize=(10, 6))
-    for y in y_axis:
-        plt.plot(df[x_axis], df[y], marker='o', label=y)
-    plt.xlabel(x_axis)
-    plt.ylabel(', '.join(y_axis))
-    plt.title('User-Generated Plot')
-    plt.legend()
+        debug_print(f"Plotting from table: {table_name}, X-axis: {x_axis}, Y-axis: {y_axis}")
 
-    # Save plot to a bytes buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close()
+        # Check if Y-axis columns are selected
+        if not y_axis:
+            return jsonify({"error": "Please select at least one column for the Y-axis."})
 
-    # Convert to base64 to send directly in the JSON response
-    plot_url = base64.b64encode(buf.getvalue()).decode('utf-8')
-    plot_url = f"data:image/png;base64,{plot_url}"
+        # Query the selected X and Y-axis columns from the user-selected table
+        conn = sqlite3.connect(DATABASE_PATH)
+        query = f"SELECT {x_axis}, {', '.join(y_axis)} FROM {table_name}"
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        debug_print(f"Data retrieved for plotting: {df.head()}")
 
-    # Return the plot URL as a JSON response
-    return jsonify({"plot_url": plot_url})
+        # Generate plot
+        plt.figure(figsize=(10, 6))
+        for y in y_axis:
+            plt.plot(df[x_axis], df[y], marker='o', label=y)
+        plt.xlabel(x_axis)
+        plt.ylabel(', '.join(y_axis))
+        plt.title('User-Generated Plot')
+        plt.legend()
+
+        # Save plot to a bytes buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close()
+
+        # Convert to base64 to send directly in the JSON response
+        plot_url = base64.b64encode(buf.getvalue()).decode('utf-8')
+        plot_url = f"data:image/png;base64,{plot_url}"
+
+        # Return the plot URL as a JSON response
+        return jsonify({"plot_url": plot_url})
+    except Exception as e:
+        debug_print(f"Error during plotting: {str(e)}")
+        return jsonify({"error": f"Error during plotting: {str(e)}"}), 500
+
 
 @main.route('/add-column', methods=['POST'])
 def add_column():
