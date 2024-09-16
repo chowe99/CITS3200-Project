@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Query and Plot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Query the Database and Plot Data</h1>
+    <form id="plot-form">
+        <div>
+            <h3>Select X-Axis:</h3>
+            <select name="x_axis">
+                {% for column in x_axis_options %}
+                    <option value="{{ column }}">{{ column }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
+            <div>
+                {% for column in y_axis_options %}
+                    <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column }}<br>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button type="submit">Generate Plot</button>
+    </form>
+
+    <!-- Container to display the plot -->
+    <div id="plot-container">
+        <h2>Generated Plot:</h2>
+        <img id="plot-image" src="" alt="Generated Plot" style="display: none;">
+    </div>
+
+    <!-- Button to open the add column modal -->
+    <button id="add-column-btn">Add New Column</button>
+
+    <!-- Modal for adding a new column -->
+    <div id="add-column-modal" style="display: none;">
+        <h2>Add a New Column</h2>
+        <form id="add-column-form">
+            <label for="column-name">Column Name:</label>
+            <input type="text" id="column-name" name="column_name" required><br>
+
+            <label for="column-type">Column Data Type:</label>
+            <select id="column-type" name="column_type" required>
+                <option value="INTEGER">INTEGER</option>
+                <option value="REAL">REAL</option>
+                <option value="TEXT">TEXT</option>
+            </select><br>
+
+            <label for="column-data">Enter Data (comma-separated) or Upload CSV:</label>
+            <textarea id="column-data" name="column_data"></textarea><br>
+            <input type="file" id="column-file" name="column_file" accept=".csv"><br>
+
+            <button type="submit">Add Column</button>
+            <button type="button" id="close-modal">Cancel</button>
+        </form>
+    </div>
+
+    <!-- Link to external JavaScript file -->
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+</body>
+</html>
+
