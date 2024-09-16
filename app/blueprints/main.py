@@ -32,13 +32,16 @@ def home():
 
 @main.route('/plot', methods=['POST'])
 def plot():
-    selected_columns = request.form.getlist('columns')
     x_axis = request.form['x_axis']
-    y_axis = request.form.getlist('y_axis')  # Allow multiple Y-axes
+    y_axis = request.form.getlist('y_axis')  # Get selected Y-axis columns
 
-    # Query the selected columns from the database
+    # Check if Y-axis columns are selected
+    if not y_axis:
+        return jsonify({"error": "Please select at least one column for the Y-axis."})
+
+    # Query the selected X and Y-axis columns from the database
     conn = sqlite3.connect(DATABASE_PATH)
-    query = f"SELECT {', '.join(selected_columns)} FROM CSL_1_U"  # Adjust your table name
+    query = f"SELECT {x_axis}, {', '.join(y_axis)} FROM CSL_1_U"  # Adjust your table name
     df = pd.read_sql_query(query, conn)
     conn.close()
 
