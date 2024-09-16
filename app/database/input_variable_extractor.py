@@ -13,14 +13,18 @@ def find_inputs_and_extract(doc_name, sheet_name, input_header):
                 break
     
     df = pd.read_excel(doc_name, sheet_name = sheet_name, header= row_value-1)
-    wanted_columns = df.iloc[:, [column_value - 1, column_value]]
+    wanted_columns = df.iloc[:, [column_value - 1, column_value, column_value + 1]]
     df_cleaned = wanted_columns.dropna(subset=[wanted_columns.columns[0]])
 
+    result_dict = {}
+
+    for _, row in df_cleaned.iterrows():
+        if pd.notna(row[2]):
+            result_dict[row.iloc[0]] = (row.iloc[1], row.iloc[2]) 
+        else:
+            result_dict[row.iloc[0]] = row.iloc[1]
     
-    keys = df_cleaned.iloc[:, 0]
-    values = df_cleaned.iloc[:, 1]
+    return result_dict
     
-    input_dict = dict(zip(keys, values))
-    return input_dict
-   
-print(find_inputs_and_extract('Copy of CSL_1_U-template.xlsx', '01 - Inputs', 'General inputs and calculations'))
+#print(find_inputs_and_extract('Copy of CSL_1_U-template.xlsx', '01 - Inputs', 'General inputs and calculations'))
+#print(find_inputs_and_extract('Copy of CSL_1_U-template.xlsx', '01 - Inputs', 'Sample dimensions'))
