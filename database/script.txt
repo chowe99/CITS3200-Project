@@ -1,0 +1,40 @@
+﻿CREATE TABLE extracted_data (
+        ID INTEGER PRIMARY KEY
+        time_start_of_stage INTEGER,
+        shear_induced_PWP      REAL,
+        axial_strain                REAL,
+        vol_strain                    REAL,
+        induced_PWP                  REAL,
+        p                                      REAL,
+        q                                      REAL,
+        e                                      REAL, 
+        metadata_id INTEGER, 
+      FOREIGN KEY (metadata_id) REFERENCES metadata(ID)
+);
+
+ALTER TABLE extracted_data ADD COLUMN id INTEGER;
+UPDATE extracted_data
+SET id = ROWID;
+
+
+
+CREATE TABLE INSTANCES (
+	ID INTEGER primary key,
+	Instances varchar( ),
+                      USER_ID INTEGER,
+                    FOREIGN KEY (user_id) REFERENCES users(UserID)
+	
+
+CREATE TABLE USERS (
+UserID INT PRIMARY KEY 
+Name VARCHAR (50),
+Email VARCHAR(250),
+Password VARCHAR (100)
+)
+
+SELECT e.ID, e.time_start_of_stage, m.Instances, u.Name
+FROM extracted_data e
+JOIN metadata m ON e.metadata_id = m.ID
+JOIN users u ON m.user_id = u.UserID;
+
+
