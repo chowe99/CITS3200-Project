@@ -112,6 +112,4 @@ venv/
 # Docker
 *.log
 *.env
-Dockerfile
-docker-compose.yml
 
