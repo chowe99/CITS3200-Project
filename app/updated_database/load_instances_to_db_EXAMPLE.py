@@ -3,7 +3,6 @@ from instances_extractor import find_instances
 
 ## This script isnt flexible for other spreadsheets
 
-
 db = sqlite3.connect('soil_test_results.db')
 cursor = db.cursor()
 
@@ -26,15 +25,23 @@ value_list = name_result[0]
 new['spreadsheet_id'] = value_list
 
 for key in data:
-    index = get_index(key, data[key], 'instances')
-    if index:
-        new[key] = index
-    else:
-        new[key] = data[key]
+    if key == "availability":
+        if data[key] == "public":
+            boolean_value = 1 ## One for true
+        else:
+            boolean_value = 0 ## Zero for false
+        availability_query = "UPDATE spreadsheets SET public = ? WHERE spreadsheet_name = ?"
+        cursor.execute(availability_query, (boolean_value, name))
+
+    else: 
+        index = get_index(key, data[key], 'instances')
+        if index:
+            new[key] = index
+        else:
+            new[key] = data[key]
 
 
 columns = ', '.join(new.keys())
-
 placeholders = ', '.join(f':{key}' for key in new.keys())
 
 insert_query = f"INSERT INTO spreadsheet_instances ({columns}) VALUES ({placeholders})"

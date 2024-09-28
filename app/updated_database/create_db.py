@@ -6,7 +6,8 @@ cursor = conn.cursor()
 cursor.execute('''
 CREATE TABLE spreadsheets (
     spreadsheet_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    spreadsheet_name TEXT NOT NULL
+    spreadsheet_name TEXT NOT NULL,
+    public INTEGER
 );
 ''')
 
@@ -42,8 +43,6 @@ VALUES
     ('shearing', 'extension'),
     ('anisotropy', 'isotropic'),
     ('anisotropy', 'anisotropic'),
-    ('availability', 'public'),
-    ('availability', 'confidential'),
     ('density', 'loose'),
     ('density', 'dense'),
     ('plasticity', 'plastic'),
@@ -62,7 +61,6 @@ CREATE TABLE spreadsheet_instances (
     anisotropy INTEGER,
     anisotropy_value INTEGER,
     consolidation INTEGER,
-    availability INTEGER,
     density INTEGER,
     plasticity INTEGER,
     PSD INTEGER,
@@ -71,7 +69,6 @@ CREATE TABLE spreadsheet_instances (
     FOREIGN KEY (drainage) REFERENCES instances(instance_id),
     FOREIGN KEY (shearing) REFERENCES instances(instance_id),
     FOREIGN KEY (anisotropy) REFERENCES instances(instance_id),
-    FOREIGN KEY (availability) REFERENCES instances(instance_id),
     FOREIGN KEY (density) REFERENCES instances(instance_id),
     FOREIGN KEY (plasticity) REFERENCES instances(instance_id),
     FOREIGN KEY (PSD) REFERENCES instances(instance_id)
