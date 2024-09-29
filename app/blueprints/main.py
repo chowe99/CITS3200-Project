@@ -139,11 +139,14 @@ def add_column():
     column_name = request.form['column_name']
     column_type = request.form['column_type']
     column_data = request.form.get('column_data', '')
+    table_name = request.form.get('table_name', '')
     file = request.files.get('column_file')
 
     # Validate column name and type
     if not column_name or not column_type:
         return jsonify({"message": "Column name and type are required.", "success": False})
+    if not table_name:
+        return jsonify({"message": "Please load a table first.", "success": False})
 
     # Prepare data from textarea or CSV file
     data_list = []
@@ -168,11 +171,11 @@ def add_column():
     conn = sqlite3.connect(DATABASE_PATH)
     try:
         # Add column to the table
-        conn.execute(f"ALTER TABLE CSL_1_U ADD COLUMN {column_name} {column_type}")
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
         # Insert data into the new column
         for i, value in enumerate(data_list):
-            conn.execute(f"UPDATE CSL_1_U SET {column_name} = ? WHERE rowid = ?", (value, i + 1))
+            conn.execute(f"UPDATE {table_name} SET {column_name} = ? WHERE rowid = ?", (value, i + 1))
 
         conn.commit()
         return jsonify({"message": f"Column '{column_name}' added successfully!", "success": True})

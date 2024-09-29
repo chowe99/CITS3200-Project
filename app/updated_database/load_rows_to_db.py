@@ -1,5 +1,5 @@
 import sqlite3
-from cleaning_script import data_extractor
+from row_extractor import data_extractor
 
 conn = sqlite3.connect('soil_test_results.db')
 cursor = conn.cursor()

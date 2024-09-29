@@ -137,6 +137,9 @@ document.getElementById('add-column-form').addEventListener('submit', function (
     event.preventDefault();
 
     const formData = new FormData(event.target);
+    const tableName = document.getElementById('table-select').value;
+    formData.append('table_name', tableName);
+
     fetch('/add-column', {
         method: 'POST',
         body: formData,
