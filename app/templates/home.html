@@ -13,7 +13,13 @@
     <!-- Table selection dropdown -->
     <form id="table-form">
         <label for="table-select">Select Table:</label>
-        <select id="table-select" name="table_name">
+        <select id="table-select" name="table_name[]" multiple>
+        <p>To select multiple options: </p>
+        <ul>
+            <li>On Windows, hold the <strong>Ctrl</strong> key and click.</li>
+            <li>On <strong>Mac</strong>, hold the <strong>Cmd (⌘)</strong> key and click.</li>
+            <li>Hold the <strong>Shift</strong> key to select a range of adjacent options.</li>
+        </ul>
             {% for table in tables %}
                 <option value="{{ table }}">{{ table }}</option>
             {% endfor %}
@@ -27,7 +33,7 @@
             <h3>Select X-Axis:</h3>
             <select name="x_axis">
                 {% for column in x_axis_options %}
-                    <option value="{{ column }}">{{ column }}</option>
+                    <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -37,7 +43,11 @@
             <!-- Add ID to this div -->
             <div id="y-axis-container">
                 {% for column in y_axis_options %}
-                    <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column }}<br>
+                    {% if column == 'p' %}
+                        <input type="checkbox" name="y_axis" value="{{ column }}"> p'<br>
+                    {% else %}
+                        <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
+                    {% endif %}
                 {% endfor %}
             </div>
         </div>

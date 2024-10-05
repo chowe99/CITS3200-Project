@@ -19,25 +19,25 @@ def debug_print(message):
 
 main = Blueprint('main', __name__)
 
-DATABASE_PATH = 'app/database/data.db'
+DATABASE_PATH = 'app/updated_database/soil_test_results.db'
 
 
 def get_tables():
     """Retrieve all table names from the database."""
     conn = sqlite3.connect(DATABASE_PATH)
-    query = "SELECT name FROM sqlite_master WHERE type='table';"
+    query = "SELECT spreadsheet_name FROM spreadsheets;"
     tables = [row[0] for row in conn.execute(query).fetchall()]
     conn.close()
     debug_print(f"Available tables: {tables}")
     return tables
 
-def get_columns(table_name):
-    """Retrieve column names from the selected table."""
+def get_columns():
+    """Retrieve column names from the table structure."""
     conn = sqlite3.connect(DATABASE_PATH)
-    query = f"SELECT * FROM {table_name} LIMIT 1"
+    query = f"SELECT * FROM spreadsheet_rows LIMIT 1"
     df = pd.read_sql_query(query, conn)
     conn.close()
-    debug_print(f"Columns in table '{table_name}': {df.columns.tolist()}")
+    debug_print(f"Columns available: {df.columns.tolist()}")
     return df.columns.tolist()
 
 @main.route('/')
@@ -48,24 +48,18 @@ def home():
 
 @main.route('/load-table', methods=['POST'])
 def load_table():
-    table_name = request.form['table_name']
+    table_name = request.form.getlist('table_name[]')
     debug_print(f"Loading table: {table_name}")
 
     try:
-        # Fetch column names based on the selected table
-        columns = get_columns(table_name)
+        # Fetch column
+        columns = get_columns()
 
         # Define potential X-axis options (e.g., time columns, axial strain, mean effective stress)
-        x_axis_options = [
-            col for col in columns if "time_start_of_stage" in col or "Sec" in col or 
-            "hours" in col or "axial_strain" in col or "axial strain" in col or 
-            "p'" in col or "Mean Effective Stress" in col
-        ]
+        x_axis_options = [col for col in columns if col != "spreadsheet_id"]
+        y_axis_options = [col for col in columns if col != "spreadsheet_id" and col != "time_start_of_stage"]
 
         # Define potential Y-axis options (e.g., pressures, displacements, volumes, strains)
-        y_axis_options = [
-            col for col in columns if col not in x_axis_options
-        ]
 
         debug_print(f"X-axis options: {x_axis_options}")
         debug_print(f"Y-axis options: {y_axis_options}")
@@ -83,7 +77,7 @@ def load_table():
 @main.route('/plot', methods=['POST'])
 def plot():
     try:
-        table_name = request.form.get('table_name')
+        table_name = request.form.getlist('table_name[]')
         x_axis = request.form.get('x_axis')
         y_axis = request.form.getlist('y_axis')
 
@@ -101,17 +95,20 @@ def plot():
         if not y_axis:
             return jsonify({"error": "Please select at least one column for the Y-axis."})
 
-        # Query the selected X and Y-axis columns from the user-selected table
         conn = sqlite3.connect(DATABASE_PATH)
-        query = f"SELECT {x_axis}, {', '.join(y_axis)} FROM {table_name}"
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-        debug_print(f"Data retrieved for plotting: {df.head()}")
 
         # Generate plot
+        
         plt.figure(figsize=(10, 6))
-        for y in y_axis:
-            plt.plot(df[x_axis], df[y], marker='o', label=y)
+
+        for table in table_name:
+            query = f"SELECT {x_axis}, {', '.join(y_axis)} FROM spreadsheet_rows JOIN spreadsheets ON spreadsheet_rows.spreadsheet_id = spreadsheets.spreadsheet_id WHERE spreadsheet_name =" + f"'{table}'"
+            df = pd.read_sql_query(query, conn)
+            debug_print(f"Data retrieved for plotting: {df.head()}")
+            for y in y_axis:
+                plot_label = f"{table}: {y}"
+                plt.plot(df[x_axis], df[y], marker='o', label=plot_label)
+
         plt.xlabel(x_axis)
         plt.ylabel(', '.join(y_axis))
         plt.title('User-Generated Plot')
@@ -126,6 +123,8 @@ def plot():
         # Convert to base64 to send directly in the JSON response
         plot_url = base64.b64encode(buf.getvalue()).decode('utf-8')
         plot_url = f"data:image/png;base64,{plot_url}"
+
+        conn.close()
 
         # Return the plot URL as a JSON response
         return jsonify({"plot_url": plot_url})

@@ -5,7 +5,7 @@ document.getElementById('table-form').addEventListener('submit', async function 
     event.preventDefault();
 
     const formData = new FormData(event.target);
-    selectedTableName = formData.get('table_name'); // Store the selected table name
+    selectedTableNames = formData.getAll('table_name[]'); // Store the selected table name
     try {
         const response = await fetch('/load-table', {
             method: 'POST',
@@ -88,12 +88,16 @@ document.getElementById('plot-form').addEventListener('submit', async function (
         return;
     }
 
-    // Append the selected table name to the form data
-    if (selectedTableName) {
-        formData.append('table_name', selectedTableName); // Append the table name
+    // Get all selected table names (since multiple selection is allowed)
+    const selectedTables = Array.from(document.getElementById('table-select').selectedOptions)
+                                .map(option => option.value);
+
+    // Ensure at least one table is selected before appending
+    if (selectedTables.length > 0) {
+        selectedTables.forEach(table => formData.append('table_name[]', table)); // Append all selected table names
     } else {
-        console.error('Table name is missing');
-        alert('Please select a table.');
+        console.error('No tables selected');
+        alert('Please select at least one table.');
         return;
     }
 
