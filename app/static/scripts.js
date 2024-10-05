@@ -160,3 +160,32 @@ document.getElementById('add-column-form').addEventListener('submit', function (
         .catch(error => console.error('Error:', error));
 });
 
+function hideForms() {
+    document.getElementById("spreadsheet-selection").style.display = 'none';
+    document.getElementById('instance-selection').style.display = 'none';
+}
+
+window.onload = hideForms;
+
+document.getElementById('form-select').addEventListener('change', function() {
+    hideForms();
+
+    var selectedForm = this.value;
+
+    if (selectedForm === 'table') {
+        document.getElementById("spreadsheet-selection").style.display = 'block';
+    } else if (selectedForm === 'instance') {
+        document.getElementById('instance-selection').style.display = 'block';
+    }
+});
+
+function toggleValueChecklist(checkbox) {
+    const valueChecklist = checkbox.parentElement.querySelector('.value-checklist');
+    if (checkbox.checked) {
+        valueChecklist.style.display = 'block';
+    } else {
+        valueChecklist.style.display = 'none';
+        const valueCheckboxes = valueChecklist.querySelectorAll('input[type="checkbox"]');
+        valueCheckboxes.forEach((cb) => cb.checked = false); 
+    }
+}

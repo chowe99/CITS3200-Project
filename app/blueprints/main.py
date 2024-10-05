@@ -31,11 +31,30 @@ def get_tables():
     debug_print(f"Available tables: {tables}")
     return tables
 
+def get_instances():
+    conn = sqlite3.connect(DATABASE_PATH)
+    query = "SELECT instance_name, instance_value FROM instances;"
+    result = conn.execute(query).fetchall()
+    instances = {}
+
+    for row in result:
+        key = row[0]
+        value = row[1]
+        if key in instances:
+            instances[key].append(value)
+        else:
+            instances[key] = [value]
+    
+    conn.close()
+    debug_print(f"Available instances: {instances}")
+    return instances
+
 def get_columns():
     """Retrieve column names from the table structure."""
     conn = sqlite3.connect(DATABASE_PATH)
-    query = f"SELECT * FROM spreadsheet_rows LIMIT 1"
+    query = f"SELECT * FROM spreadsheet_rows, added_columns LIMIT 1"
     df = pd.read_sql_query(query, conn)
+    
     conn.close()
     debug_print(f"Columns available: {df.columns.tolist()}")
     return df.columns.tolist()
@@ -44,9 +63,10 @@ def get_columns():
 def home():
     # Get all available tables from the database
     tables = get_tables()
-    return render_template('home.html', tables=tables)
+    instances = get_instances()
+    return render_template('home.html', tables=tables, instances = instances)
 
-@main.route('/load-table', methods=['POST'])
+@main.route('/load-table', methods=['POST']) #load columns
 def load_table():
     table_name = request.form.getlist('table_name[]')
     debug_print(f"Loading table: {table_name}")
@@ -57,7 +77,7 @@ def load_table():
 
         # Define potential X-axis options (e.g., time columns, axial strain, mean effective stress)
         x_axis_options = [col for col in columns if col != "spreadsheet_id"]
-        y_axis_options = [col for col in columns if col != "spreadsheet_id" and col != "time_start_of_stage"]
+        y_axis_options = [col for col in columns if col != "spreadsheet_id" and col != "time_start_of_stage" and col != "id"]
 
         # Define potential Y-axis options (e.g., pressures, displacements, volumes, strains)
 
@@ -97,17 +117,37 @@ def plot():
 
         conn = sqlite3.connect(DATABASE_PATH)
 
-        # Generate plot
-        
+        query = f"SELECT * FROM spreadsheet_rows LIMIT 1"
+        df = pd.read_sql_query(query, conn)
+        unadded_y_axis = df.columns.tolist()
+
         plt.figure(figsize=(10, 6))
 
-        for table in table_name:
-            query = f"SELECT {x_axis}, {', '.join(y_axis)} FROM spreadsheet_rows JOIN spreadsheets ON spreadsheet_rows.spreadsheet_id = spreadsheets.spreadsheet_id WHERE spreadsheet_name =" + f"'{table}'"
-            df = pd.read_sql_query(query, conn)
-            debug_print(f"Data retrieved for plotting: {df.head()}")
-            for y in y_axis:
-                plot_label = f"{table}: {y}"
-                plt.plot(df[x_axis], df[y], marker='o', label=plot_label)
+        # Generate plot
+        
+        selected_unadded_y = [item for item in y_axis if item in unadded_y_axis]
+        debug_print(f"columns: {selected_unadded_y}")
+
+        selected_added_y = [item for item in y_axis if item not in unadded_y_axis]
+        debug_print(f"columns: {selected_added_y }")
+
+
+        if selected_unadded_y:
+            for table in table_name:
+                query = f"SELECT {x_axis}, {', '.join(selected_unadded_y)} FROM spreadsheet_rows JOIN spreadsheets ON spreadsheet_rows.spreadsheet_id = spreadsheets.spreadsheet_id WHERE spreadsheet_name =" + f"'{table}'"
+                df = pd.read_sql_query(query, conn)
+                debug_print(f"Data retrieved for plotting: {df.head()}")
+                for y in selected_unadded_y:
+                    plot_label = f"{table}: {y}"
+                    plt.plot(df[x_axis], df[y], marker='o', label=plot_label)
+        
+        if selected_added_y:    
+            for y in selected_added_y:
+                query = f"SELECT {y} FROM added_columns"
+                df2 = pd.read_sql_query(query, conn)
+                debug_print(df2)
+                for i, (a, b) in enumerate(zip(df[x_axis], df2)):
+                    plt.plot([i, i], [a, b], marker='o', label= y)
 
         plt.xlabel(x_axis)
         plt.ylabel(', '.join(y_axis))
@@ -138,14 +178,11 @@ def add_column():
     column_name = request.form['column_name']
     column_type = request.form['column_type']
     column_data = request.form.get('column_data', '')
-    table_name = request.form.get('table_name', '')
     file = request.files.get('column_file')
 
     # Validate column name and type
     if not column_name or not column_type:
         return jsonify({"message": "Column name and type are required.", "success": False})
-    if not table_name:
-        return jsonify({"message": "Please load a table first.", "success": False})
 
     # Prepare data from textarea or CSV file
     data_list = []
@@ -170,11 +207,11 @@ def add_column():
     conn = sqlite3.connect(DATABASE_PATH)
     try:
         # Add column to the table
-        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+        conn.execute(f"ALTER TABLE added_columns ADD COLUMN {column_name} {column_type}")
 
         # Insert data into the new column
         for i, value in enumerate(data_list):
-            conn.execute(f"UPDATE {table_name} SET {column_name} = ? WHERE rowid = ?", (value, i + 1))
+            conn.execute(f"UPDATE added_columns SET {column_name} = ? WHERE rowid = ?", (value, i + 1))
 
         conn.commit()
         return jsonify({"message": f"Column '{column_name}' added successfully!", "success": True})

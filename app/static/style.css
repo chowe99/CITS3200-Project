@@ -64,3 +64,9 @@ div img {
     border-radius: 8px;
 }
 
+.value-checklist {
+    margin-left: 20px; 
+    padding: 5px;     
+    border-top: 1px solid #f4f4f9;
+    background-color: #4a90e2; 
+}
