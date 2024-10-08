@@ -22,8 +22,8 @@
 
     <h2>Upload Excel File</h2>
     <form id="upload-form" method="post" enctype="multipart/form-data" action="/upload">
-      <label for="excel-file">Select Excel File:</label>
-      <input type="file" id="excel-file" name="excel_file" accept=".xlsx" required><br><br>
+      <label for="excel-file">Select Excel Files:</label>
+      <input type="file" id="excel-file" name="excel_files" accept=".xlsx" multiple required><br><br>
 
       <label for="password">Encryption Password (optional):</label>
       <input type="password" id="encrypt_password" name="encrypt_password" placeholder="Enter password to encrypt data"><br><br>
