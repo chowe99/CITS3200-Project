@@ -70,3 +70,31 @@ div img {
     border-top: 1px solid #f4f4f9;
     background-color: #4a90e2; 
 }
+
+/* style.css */
+
+/* Existing styles... */
+
+#plot-container {
+    width: 100%;
+    max-width: 1000px; /* Adjust as needed */
+    height: 600px;     /* Set the desired height */
+    margin: 0 auto;    /* Center the container horizontally */
+    padding: 10px;     /* Optional: Add some padding */
+    box-sizing: border-box; /* Include padding in the element's total width and height */
+}
+
+.flashes {
+    list-style-type: none;
+    padding: 0;
+}
+
+.flashes li {
+    background-color: #f0f8ff;
+    color: #333;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #bcd;
+    border-radius: 4px;
+}
+
