@@ -5,16 +5,10 @@ services:
       - "5000:5000"
     volumes:
       - .:/app
+      - "${NAS_MOUNT_PATH:-/mnt/nas}:/mnt/nas"  # Use an environment variable with a default
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-      - DATABASE_URL=postgresql://user:password@db:5432/yourdb
-    depends_on:
-      - db
-  db:
-    image: postgres:13
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=yourdb
+      - DATABASE_PATH=/mnt/nas/soil_test_results.db  # Use environment variable in the app
+    

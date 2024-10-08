@@ -24,35 +24,31 @@
     <form id="upload-form" method="post" enctype="multipart/form-data" action="/upload">
       <label for="excel-file">Select Excel File:</label>
       <input type="file" id="excel-file" name="excel_file" accept=".xlsx" required><br><br>
+
+      <label for="password">Encryption Password (optional):</label>
+      <input type="password" id="encrypt_password" name="encrypt_password" placeholder="Enter password to encrypt data"><br><br>
+
       <button type="submit">Upload and Process</button>
     </form>
 
     <label for="form-select">Filter by:</label>
     <select id="form-select">
-      <option>Select an option</option>
-      <option value="table">Spreadsheet(s)</option>
+      <option value="table" selected>Spreadsheet(s)</option>
       <option value="instance">Instance(s)</option>
     </select>
 
-    <div id = "spreadsheet-selection">
+    <div id="spreadsheet-selection">
       <form id="table-form">
-        <label for="table-select">Select table:</label>
-        <select id="table-select" name="table_name[]" multiple>
+        <label>Select table(s):</label>
+        <div id="table-checkboxes">
           {% for table in tables %}
-          <option value="{{ table }}">{{ table }}</option>
+          <input type="checkbox" name="table_name[]" value="{{ table }}"> {{ table }}<br>
           {% endfor %}
-        </select>
-        <button type="submit">Load column</button>
+        </div>
+        <label for="password">Decryption Password:</label>
+        <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
+        <button type="submit">Load columns</button>
       </form>
-
-      <div id = "table-form">
-        <p>To select multiple options: </p>
-        <ul>
-          <li>On <strong>Windows</strong>, hold the <strong>Ctrl</strong> key and click.</li>
-          <li>On <strong>Mac</strong>, hold the <strong>Cmd (⌘)</strong> key and click.</li>
-          <li>Hold the <strong>Shift</strong> key to select a range of adjacent options.</li>
-        </ul>
-      </div>
     </div>
 
     <div id = "instance-selection">
