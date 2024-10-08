@@ -4,4 +4,5 @@ openpyxl             # For reading Excel files if needed
 pandas               # For handling data querying and manipulation
 matplotlib           # For generating plots and visualizations
 #sqlite3              # Built-in, no need to add separately; included with Python standard library
+plotly
 

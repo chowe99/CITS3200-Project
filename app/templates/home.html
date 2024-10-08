@@ -8,18 +8,71 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
     <h1>Soil Database Tool</h1>
 
-    <!-- Table selection dropdown -->
-    <form id="table-form">
-        <label for="table-select">Select Table:</label>
-        <select id="table-select" name="table_name">
-            {% for table in tables %}
-                <option value="{{ table }}">{{ table }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit">Load Table</button>
+    <h2>Upload Excel File</h2>
+    <form id="upload-form" method="post" enctype="multipart/form-data" action="/upload">
+      <label for="excel-file">Select Excel File:</label>
+      <input type="file" id="excel-file" name="excel_file" accept=".xlsx" required><br><br>
+      <button type="submit">Upload and Process</button>
     </form>
+
+    <label for="form-select">Filter by:</label>
+    <select id="form-select">
+        <option>Select an option</option>
+        <option value="table">Spreadsheet(s)</option>
+        <option value="instance">Instance(s)</option>
+    </select>
+
+    <div id = "spreadsheet-selection">
+        <form id="table-form">
+            <label for="table-select">Select table:</label>
+            <select id="table-select" name="table_name[]" multiple>
+                {% for table in tables %}
+                    <option value="{{ table }}">{{ table }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Load column</button>
+        </form>
+
+        <div id = "table-form">
+            <p>To select multiple options: </p>
+            <ul>
+                <li>On <strong>Windows</strong>, hold the <strong>Ctrl</strong> key and click.</li>
+                <li>On <strong>Mac</strong>, hold the <strong>Cmd (⌘)</strong> key and click.</li>
+                <li>Hold the <strong>Shift</strong> key to select a range of adjacent options.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div id = "instance-selection">
+        <form id="instance-form">
+            <label for="instance-select">Select instance:</label>
+            {% for key, values in instances.items() %}
+            <div>
+                <input type="checkbox" id="{{ key }}" name="instances" value="{{ key }}" onclick="toggleValueChecklist(this)">
+                <label for="{{ key }}">{{ key }}</label>
+                <div class="value-checklist" style="display: none;">
+                    {% for value in values %}
+                        <input type="checkbox" id="{{ value }}" name="{{ key }}_values" value="{{ value }}">
+                        <label for="{{ value }}">{{ value }}</label><br>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            <button type="submit">Load columns</button>
+            
+        </form>
+    </div>
 
     <!-- Plot form, hidden until a table is selected -->
     <form id="plot-form" style="display: none;">
@@ -27,7 +80,7 @@
             <h3>Select X-Axis:</h3>
             <select name="x_axis">
                 {% for column in x_axis_options %}
-                    <option value="{{ column }}">{{ column }}</option>
+                    <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -37,7 +90,11 @@
             <!-- Add ID to this div -->
             <div id="y-axis-container">
                 {% for column in y_axis_options %}
-                    <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column }}<br>
+                    {% if column == 'p' %}
+                        <input type="checkbox" name="y_axis" value="{{ column }}"> p'<br>
+                    {% else %}
+                        <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
+                    {% endif %}
                 {% endfor %}
             </div>
         </div>
@@ -46,9 +103,8 @@
     </form>
 
     <!-- Container to display the plot -->
+    <h2>Generated Plot:</h2>
     <div id="plot-container">
-        <h2>Generated Plot:</h2>
-        <img id="plot-image" src="" alt="Generated Plot" style="display: none;">
     </div>
 
     <!-- Button to open the add column modal -->
@@ -79,6 +135,9 @@
 
     <!-- Link to external JavaScript file -->
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+    <!-- Include Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
 </body>
 </html>
 
