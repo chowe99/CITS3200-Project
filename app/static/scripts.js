@@ -1,121 +1,141 @@
-let selectedTableName = ""; // Variable to store the selected table name
-
-function showMessage(message, isSuccess, elementId) {
+async function showMessage(message, isSuccess, elementId) {
   const messageArea = document.getElementById(elementId);
   if (messageArea) {
     messageArea.textContent = message;
     messageArea.style.color = isSuccess ? "green" : "red";
-    messageArea.style.display = "block";
+    messageArea.style.display = message ? "block" : "none"; // Hide if message is empty
   }
 }
 
-// Handle table form submission
+// Handle the upload form submission
 document
-  .getElementById("table-form")
+  .getElementById("upload-form")
+  .addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const formData = new FormData(form);
+
+    try {
+      const response = await fetch("/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Display success message
+        await showMessage(data.message, true, "message-area");
+        // Refresh the table list
+        await refreshTableList();
+      } else {
+        // Display error message
+        await showMessage(data.message, false, "message-area");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      await showMessage(
+        "An error occurred while uploading the file.",
+        false,
+        "message-area",
+      );
+    }
+  });
+
+// Function to refresh the table list after uploading new spreadsheets
+async function refreshTableList() {
+  try {
+    const response = await fetch("/get-tables");
+    const data = await response.json();
+    const tableCheckboxes = document.getElementById("table-checkboxes");
+    tableCheckboxes.innerHTML = ""; // Clear existing options
+    data.tables.forEach((table) => {
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "table_name[]";
+      checkbox.value = table;
+
+      const label = document.createElement("label");
+      label.textContent = table;
+
+      tableCheckboxes.appendChild(checkbox);
+      tableCheckboxes.appendChild(label);
+      tableCheckboxes.appendChild(document.createElement("br"));
+    });
+  } catch (error) {
+    console.error("Error fetching table list:", error);
+    await showMessage("Error fetching table list.", false, "message-area");
+  }
+}
+
+// Handle filter form submission (combined table and instance filters)
+document
+  .getElementById("filter-form")
   .addEventListener("submit", async function (event) {
     event.preventDefault();
 
     const formData = new FormData(event.target);
+
+    // Collect selected tables
     const selectedTables = Array.from(
       document.querySelectorAll('input[name="table_name[]"]:checked'),
     ).map((checkbox) => checkbox.value);
 
-    if (selectedTables.length > 0) {
-      selectedTables.forEach((table) => formData.append("table_name[]", table));
-    } else {
-      alert("Please select at least one table.");
-      return;
-    }
+    // Collect selected instances and their values
+    const instances = [];
+    document.querySelectorAll('input[name="instances"]').forEach((checkbox) => {
+      const instanceName = checkbox.value;
+      const selectedValues = [];
+      document
+        .querySelectorAll(`input[name="${instanceName}_values"]:checked`)
+        .forEach((valueCheckbox) => {
+          selectedValues.push(valueCheckbox.value);
+        });
+      if (selectedValues.length > 0) {
+        instances.push({ name: instanceName, values: selectedValues });
+      }
+    });
+
+    // Include selected tables and instances in form data
+    selectedTables.forEach((table) => formData.append("table_name[]", table));
+    formData.append("instances", JSON.stringify(instances));
+
+    // Determine which filters are applied based on user's selection
+    const filterType = document.getElementById("form-select").value;
+    formData.append("filter_type", filterType);
 
     try {
-      const response = await fetch("/load-table", {
+      const response = await fetch("/load-filters", {
         method: "POST",
         body: formData,
       });
       const data = await response.json();
       if (data.success) {
+        // Update plot options and display plot form
         document.getElementById("plot-form").style.display = "block";
-        updatePlotOptions(data.x_axis_options, data.y_axis_options);
+        await updatePlotOptions(data.x_axis_options, data.y_axis_options);
+
+        // Store the filtered spreadsheet IDs for plotting
+        const filteredSpreadsheetIds = data.filtered_spreadsheet_ids;
+        const hiddenInput = document.getElementById("filtered-spreadsheet-ids");
+        hiddenInput.value = JSON.stringify(filteredSpreadsheetIds);
       } else {
-        alert(data.message);
+        await showMessage(data.message, false, "message-area");
       }
     } catch (error) {
       console.error("Error:", error);
-    }
-  });
-
-// Handle plot form submission
-document
-  .getElementById("plot-form")
-  .addEventListener("submit", async function (event) {
-    event.preventDefault();
-
-    const formData = new FormData(event.target);
-    const x_axis_value = document.querySelector('select[name="x_axis"]').value;
-
-    if (x_axis_value) {
-      formData.append("x_axis", x_axis_value);
-    } else {
-      showMessage("Please select an X-Axis value.", false, "plot-message-area");
-      return;
-    }
-
-    // Get all selected table names
-    const selectedTables = Array.from(
-      document.querySelectorAll('input[name="table_name[]"]:checked'),
-    ).map((checkbox) => checkbox.value);
-
-    if (selectedTables.length > 0) {
-      selectedTables.forEach((table) => formData.append("table_name[]", table));
-    } else {
-      showMessage(
-        "Please select at least one table.",
+      await showMessage(
+        "An error occurred while applying filters.",
         false,
-        "plot-message-area",
+        "message-area",
       );
-      return;
-    }
-
-    // Get decryption password
-    const decryptPassword = document.getElementById("decrypt_password").value;
-    formData.append("decrypt_password", decryptPassword);
-
-    try {
-      const response = await fetch("/plot", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (data.graph_json) {
-        const plotData = JSON.parse(data.graph_json);
-        Plotly.react("plot-container", plotData.data, plotData.layout);
-        showMessage("Plot generated successfully.", true, "plot-message-area");
-      } else if (data.error) {
-        showMessage(data.error, false, "plot-message-area");
-      } else {
-        showMessage("An unknown error occurred.", false, "plot-message-area");
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      showMessage("Error generating plot.", false, "plot-message-area");
     }
   });
 
+// Function to update plot options based on loaded columns
 async function updatePlotOptions(xOptions, yOptions) {
-  console.log("Updating plot options with:", xOptions, yOptions); // Debug log for options
   const xAxisSelect = document.querySelector('select[name="x_axis"]');
-  const yAxisContainer = document.getElementById("y-axis-container"); // Correct targeting
-
-  // Check if elements exist before modifying
-  if (!xAxisSelect) {
-    console.error("X-Axis select element not found");
-    return;
-  }
-  if (!yAxisContainer) {
-    console.error("Y-Axis container element not found");
-    return;
-  }
+  const yAxisContainer = document.getElementById("y-axis-container");
 
   // Clear current options
   xAxisSelect.innerHTML = "";
@@ -135,16 +155,14 @@ async function updatePlotOptions(xOptions, yOptions) {
     checkbox.type = "checkbox";
     checkbox.name = "y_axis";
     checkbox.value = column;
+
     const label = document.createElement("label");
     label.textContent = column;
+
     yAxisContainer.appendChild(checkbox);
     yAxisContainer.appendChild(label);
     yAxisContainer.appendChild(document.createElement("br"));
   });
-
-  // Debug log to ensure DOM elements were added correctly
-  console.log("X-Axis options after update:", xAxisSelect.innerHTML);
-  console.log("Y-Axis container after update:", yAxisContainer.innerHTML);
 }
 
 // Handle the plot form submission
@@ -160,26 +178,23 @@ document
     if (x_axis_value) {
       formData.append("x_axis", x_axis_value);
     } else {
-      showMessage("Please select an X-Axis value.", false, "plot-message-area");
-      return;
-    }
-
-    // Get all selected table names
-    const selectedTables = Array.from(
-      document.getElementById("table-select").selectedOptions,
-    ).map((option) => option.value);
-
-    // Ensure at least one table is selected
-    if (selectedTables.length > 0) {
-      selectedTables.forEach((table) => formData.append("table_name[]", table));
-    } else {
-      showMessage(
-        "Please select at least one table.",
+      await showMessage(
+        "Please select an X-Axis value.",
         false,
         "plot-message-area",
       );
       return;
     }
+
+    // Get filtered spreadsheet IDs from hidden input
+    const filteredSpreadsheetIds = document.getElementById(
+      "filtered-spreadsheet-ids",
+    ).value;
+    formData.append("filtered_spreadsheet_ids", filteredSpreadsheetIds);
+
+    // Get decryption password
+    const decryptPassword = document.getElementById("decrypt_password").value;
+    formData.append("decrypt_password", decryptPassword);
 
     try {
       const response = await fetch("/plot", {
@@ -191,83 +206,56 @@ document
       if (data.graph_json) {
         const plotData = JSON.parse(data.graph_json);
         Plotly.react("plot-container", plotData.data, plotData.layout);
-        showMessage("Plot generated successfully.", true, "plot-message-area");
+        await showMessage(
+          "Plot generated successfully.",
+          true,
+          "plot-message-area",
+        );
       } else if (data.error) {
-        showMessage(data.error, false, "plot-message-area");
+        await showMessage(data.error, false, "plot-message-area");
       } else {
-        showMessage("An unknown error occurred.", false, "plot-message-area");
+        await showMessage(
+          "An unknown error occurred.",
+          false,
+          "plot-message-area",
+        );
       }
     } catch (error) {
       console.error("Error:", error);
-      showMessage("Error generating plot.", false, "plot-message-area");
+      await showMessage("Error generating plot.", false, "plot-message-area");
     }
   });
 
-// Open and close modal functionality
-document
-  .getElementById("add-column-btn")
-  .addEventListener("click", function () {
-    document.getElementById("add-column-modal").style.display = "block";
-  });
-
-document.getElementById("close-modal").addEventListener("click", function () {
-  document.getElementById("add-column-modal").style.display = "none";
-});
-
-// Handle Add Column form submission asynchronously
-// Handle Add Column form submission asynchronously
-document
-  .getElementById("add-column-form")
-  .addEventListener("submit", function (event) {
-    event.preventDefault();
-
-    const formData = new FormData(event.target);
-    const tableName = document.getElementById("table-select").value;
-    formData.append("table_name", tableName);
-
-    fetch("/add-column", {
-      method: "POST",
-      body: formData,
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        showMessage(data.message, data.success, "add-column-message-area");
-        if (data.success) {
-          // Optionally refresh columns
-          // Hide modal if desired
-          // document.getElementById("add-column-modal").style.display = "none";
-        }
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-        showMessage(
-          "An error occurred while adding the column.",
-          false,
-          "add-column-message-area",
-        );
-      });
-  });
-
-function hideForms() {
-  document.getElementById("spreadsheet-selection").style.display = "none";
-  document.getElementById("instance-selection").style.display = "none";
-}
-
-window.onload = hideForms;
-
-document.getElementById("form-select").addEventListener("change", function () {
-  hideForms();
-
-  var selectedForm = this.value;
+// Function to show or hide forms based on filter selection
+async function showSelectedForm() {
+  const selectedForm = document.getElementById("form-select").value;
+  const spreadsheetSelection = document.getElementById("spreadsheet-selection");
+  const instanceSelection = document.getElementById("instance-selection");
 
   if (selectedForm === "table") {
-    document.getElementById("spreadsheet-selection").style.display = "block";
+    spreadsheetSelection.style.display = "block";
+    instanceSelection.style.display = "none";
   } else if (selectedForm === "instance") {
-    document.getElementById("instance-selection").style.display = "block";
+    spreadsheetSelection.style.display = "none";
+    instanceSelection.style.display = "block";
+  } else {
+    spreadsheetSelection.style.display = "block";
+    instanceSelection.style.display = "block";
   }
+}
+
+// Initialize form visibility on page load
+window.onload = async () => {
+  await showSelectedForm();
+};
+
+// Event listener for filter type selection
+document.getElementById("form-select").addEventListener("change", async () => {
+  await showSelectedForm();
 });
 
-function toggleValueChecklist(checkbox) {
+// Function to toggle visibility of instance value checklists
+async function toggleValueChecklist(checkbox) {
   const valueChecklist =
     checkbox.parentElement.querySelector(".value-checklist");
   if (checkbox.checked) {
@@ -281,109 +269,15 @@ function toggleValueChecklist(checkbox) {
   }
 }
 
-function refreshTableList() {
-  fetch("/get-tables")
-    .then((response) => response.json())
-    .then((data) => {
-      const tableSelect = document.getElementById("table-select");
-      tableSelect.innerHTML = ""; // Clear existing options
-      data.tables.forEach((table) => {
-        const option = document.createElement("option");
-        option.value = table;
-        option.textContent = table;
-        tableSelect.appendChild(option);
-      });
-    })
-    .catch((error) => {
-      console.error("Error fetching table list:", error);
-    });
-}
-
-// Handle the upload form submission
+// Clear messages when forms are changed
 document
   .getElementById("upload-form")
-  .addEventListener("submit", function (event) {
-    event.preventDefault();
-
-    const form = event.target;
-    const formData = new FormData(form);
-
-    fetch("/upload", {
-      method: "POST",
-      body: formData,
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.success) {
-          // Display success message
-          alert(data.message);
-          // Refresh the table list
-          refreshTableList();
-        } else {
-          // Display error message
-          alert(data.message);
-        }
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-        alert("An error occurred while uploading the file.");
-      });
+  .addEventListener("change", async function () {
+    await showMessage("", true, "message-area"); // Clear the message area
   });
 
-function refreshTableList() {
-  fetch("/get-tables")
-    .then((response) => response.json())
-    .then((data) => {
-      const tableCheckboxes = document.getElementById("table-checkboxes");
-      tableCheckboxes.innerHTML = ""; // Clear existing options
-      data.tables.forEach((table) => {
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.name = "table_name[]";
-        checkbox.value = table;
-
-        const label = document.createElement("label");
-        label.textContent = table;
-
-        tableCheckboxes.appendChild(checkbox);
-        tableCheckboxes.appendChild(label);
-        tableCheckboxes.appendChild(document.createElement("br"));
-      });
-    })
-    .catch((error) => {
-      console.error("Error fetching table list:", error);
-    });
-}
-
-// app/static/scripts.js
-
-function showSelectedForm() {
-  var selectedForm = document.getElementById("form-select").value;
-
-  if (selectedForm === "table") {
-    document.getElementById("spreadsheet-selection").style.display = "block";
-    document.getElementById("instance-selection").style.display = "none";
-  } else if (selectedForm === "instance") {
-    document.getElementById("spreadsheet-selection").style.display = "none";
-    document.getElementById("instance-selection").style.display = "block";
-  } else {
-    document.getElementById("spreadsheet-selection").style.display = "none";
-    document.getElementById("instance-selection").style.display = "none";
-  }
-}
-
-window.onload = showSelectedForm;
-
 document
-  .getElementById("form-select")
-  .addEventListener("change", showSelectedForm);
-
-// Clear message when the upload form is changed
-document.getElementById("upload-form").addEventListener("change", function () {
-  showMessage("", true, "message-area"); // Clear the message area
-});
-
-// Clear plot messages when the plot form is changed
-document.getElementById("plot-form").addEventListener("change", function () {
-  showMessage("", true, "plot-message-area"); // Clear the plot message area
-});
+  .getElementById("plot-form")
+  .addEventListener("change", async function () {
+    await showMessage("", true, "plot-message-area"); // Clear the plot message area
+  });

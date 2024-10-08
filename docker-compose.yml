@@ -14,6 +14,6 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:5123"]
       interval: 2s
-      timeout: 10s
+      timeout: 60s
       retries: 5
     

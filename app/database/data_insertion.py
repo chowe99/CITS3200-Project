@@ -17,6 +17,7 @@ def encrypt_value(value, key, iv):
     return base64.b64encode(encrypted).decode('utf-8')
 
 def insert_data_to_db(name, df, spreadsheet=None, encrypt=False, encryption_key=None, iv=None):
+
     if spreadsheet is None:
         existing_spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=name).first()
         if existing_spreadsheet:
