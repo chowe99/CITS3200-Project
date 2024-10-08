@@ -64,58 +64,50 @@ def upload_file():
     password = request.form.get('encrypt_password')
     encrypt_data = bool(password)
 
-    if 'excel_file' not in request.files:
+    if 'excel_files' not in request.files:
         return jsonify({'success': False, 'message': 'No file part in the request.'})
-    file = request.files['excel_file']
-    if file.filename == '':
+
+    files = request.files.getlist('excel_files')
+    
+    if not files:
         return jsonify({'success': False, 'message': 'No file selected.'})
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        sheet_name = '03 - Shearing'  # Adjust as necessary
-        df = data_extractor(file, sheet_name)
-        name = filename.rsplit('.', 1)[0]
 
-        if encrypt_data:
-            # Generate a random salt and IV
-            salt = os.urandom(16)
-            iv = os.urandom(16)
-            key = derive_key(password, salt)
+    for file in files:
+        if allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            sheet_name = '03 - Shearing'  # Adjust as necessary
+            df = data_extractor(file, sheet_name)
+            name = filename.rsplit('.', 1)[0]
 
-            # Hash the password for verification
-            password_salt, password_hash = hash_password(password)
+            if encrypt_data:
+                # Encryption logic here
+                salt = os.urandom(16)
+                iv = os.urandom(16)
+                key = derive_key(password, salt)
+                password_salt, password_hash = hash_password(password)
 
-            # Store the encrypted data and metadata
-            spreadsheet = Spreadsheet(
-                spreadsheet_name=name,
-                public=False,
-                encrypted=True,
-                key_salt=salt,
-                iv=iv,
-                password_salt=password_salt,
-                password_hash=password_hash
-            )
-            db.session.add(spreadsheet)
-            db.session.commit()
+                spreadsheet = Spreadsheet(
+                    spreadsheet_name=name,
+                    public=False,
+                    encrypted=True,
+                    key_salt=salt,
+                    iv=iv,
+                    password_salt=password_salt,
+                    password_hash=password_hash
+                )
+                db.session.add(spreadsheet)
+                db.session.commit()
 
-             # Pass the spreadsheet object to insert_data_to_db
-            result = insert_data_to_db(
-                name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
-            )
-
-            if result['success']:
-                return jsonify({'success': True, 'message': 'Encrypted data inserted successfully.'})
+                result = insert_data_to_db(
+                    name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
+                )
             else:
+                result = insert_data_to_db(name, df)
+            
+            if not result['success']:
                 return jsonify({'success': False, 'message': result['message']})
 
-        else:
-            # Handle unencrypted data insertion
-            result = insert_data_to_db(name, df)
-            if result['success']:
-                return jsonify({'success': True, 'message': result['message']})
-            else:
-                return jsonify({'success': False, 'message': result['message']})
-    else:
-        return jsonify({'success': False, 'message': 'Invalid file type. Only .xlsx files are allowed.'})
+    return jsonify({'success': True, 'message': 'Files uploaded and processed successfully.'})
 
 @main.route('/')
 def home():
@@ -186,25 +178,26 @@ def plot():
         if not y_axis:
             return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
 
-            # Get the decryption password once
+        # Get the decryption password once
         decrypt_password = request.form.get('decrypt_password')
-        decryption_keys = {}
 
         # Fetch data using SQLAlchemy
         data_frames = []
-        for table_name in table_names:
+        colors = ['red', 'blue', 'green', 'orange', 'purple']  # Define colors for each table
+        color_map = {}
+
+        for idx, table_name in enumerate(table_names):
             spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=table_name).first()
             if not spreadsheet:
                 continue
+            color_map[table_name] = colors[idx % len(colors)]  # Map table name to a color
             if spreadsheet.encrypted:
                 if not decrypt_password:
                     return jsonify({"error": f"Password required for spreadsheet '{table_name}'."}), 401
                 if not verify_password(spreadsheet.password_salt, spreadsheet.password_hash, decrypt_password):
                     return jsonify({"error": f"Incorrect password for spreadsheet '{table_name}'."}), 401
-                # Derive the encryption key
                 key = derive_key(decrypt_password, spreadsheet.key_salt)
                 iv = spreadsheet.iv
-                # Fetch rows and decrypt values
                 rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
                 data = []
                 for row in rows:
@@ -213,8 +206,7 @@ def plot():
                         encrypted_value = getattr(row, col)
                         if encrypted_value:
                             decrypted_value = decrypt_value(encrypted_value, key, iv)
-                            # Format the value to 2 decimal places before adding to the row
-                            decrypted_row[col] = round(float(decrypted_value), 4)  # Here we format the value
+                            decrypted_row[col] = round(float(decrypted_value), 4)
                         else:
                             decrypted_row[col] = None
                     decrypted_row['source'] = table_name
@@ -225,11 +217,9 @@ def plot():
                 rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
                 if not rows:
                     continue
-                # Convert rows to DataFrame and format values during extraction
                 df = pd.DataFrame([row.__dict__ for row in rows])
                 for col in [x_axis] + y_axis:
                     if col in df.columns:
-                        # Convert to float and round to 2 decimal places
                         df[col] = pd.to_numeric(df[col], errors='coerce').round(4)
                 df['source'] = table_name
                 data_frames.append(df)
@@ -237,20 +227,21 @@ def plot():
         if not data_frames:
             return jsonify({"error": "No data found for the selected tables."}), 404
 
-        # Combine data from all selected tables
         data = pd.concat(data_frames, ignore_index=True)
 
         # Create a Plotly figure
         fig = go.Figure()
 
         for y in y_axis:
-            if y in data.columns:
+            for table_name in table_names:
+                table_data = data[data['source'] == table_name]
                 fig.add_trace(go.Scatter(
-                    x=data[x_axis],
-                    y=data[y],
+                    x=table_data[x_axis],
+                    y=table_data[y],
                     mode='markers+lines',
-                    name=f"{y}",
-                    text=data['source'],
+                    name=f"{table_name} - {y}",
+                    marker=dict(color=color_map[table_name]),
+                    text=table_data['source'],
                     hovertemplate=(
                         f"<b>{y}</b>: %{{y}}<br>"
                         f"<b>{x_axis}</b>: %{{x}}<br>"
@@ -258,32 +249,40 @@ def plot():
                         "<extra></extra>"
                     )
                 ))
-            else:
-                continue
 
-        # Customize the layout
+        # Customize the layout with legend
         fig.update_layout(
             title='Interactive Plot',
             xaxis_title=x_axis,
             yaxis_title=', '.join(y_axis),
-            legend_title="Variables",
+            legend_title="Source Tables",
             hovermode='closest',
             xaxis=dict(
-                tickformat='.2f'  # Round x-axis labels to 2 decimal places
+                tickformat='.2f'
             ),
             yaxis=dict(
-                tickformat='.2f'  # Round y-axis labels to 2 decimal places
+                tickformat='.2f'
+            ),
+            margin=dict(l=50, r=50, t=50, b=50),
+            dragmode='pan',  # Enables dragging
+            legend=dict(
+                x=0.95,
+                y=0.95,
+                xanchor='right',
+                yanchor='top',
+                traceorder="normal",
+                bgcolor="rgba(255, 255, 255, 0.5)",  # Transparent background for the legend
+                bordercolor="Black",
+                borderwidth=1
             )
         )
 
-        # Convert the figure to JSON
         graph_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
         return jsonify({"graph_json": graph_json})
 
     except Exception as e:
         return jsonify({"error": f"Error during plotting: {str(e)}"}), 500
-
 @main.route('/add-column', methods=['POST'])
 def add_column():
     column_name = request.form['column_name']
