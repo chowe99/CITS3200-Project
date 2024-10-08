@@ -19,7 +19,7 @@ def data_extractor(doc_name, sheet):
     df.columns = ['_'.join(col) for col in df.columns.values]
     df.columns = ['time_start_of_stage', 'shear_induced_PWP', 'axial_strain', 'vol_strain', 'induced_PWP', "p", 'q', 'e']
     df.loc[df['axial_strain'] < 0, 'axial_strain'] = 0
-    df = df.round(2)
+    # df = df.round(2)
 
     return df
 
