@@ -8,7 +8,23 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
     <h1>Soil Database Tool</h1>
+
+    <h2>Upload Excel File</h2>
+    <form id="upload-form" method="post" enctype="multipart/form-data" action="/upload">
+      <label for="excel-file">Select Excel File:</label>
+      <input type="file" id="excel-file" name="excel_file" accept=".xlsx" required><br><br>
+      <button type="submit">Upload and Process</button>
+    </form>
 
     <label for="form-select">Filter by:</label>
     <select id="form-select">
@@ -87,9 +103,8 @@
     </form>
 
     <!-- Container to display the plot -->
+    <h2>Generated Plot:</h2>
     <div id="plot-container">
-        <h2>Generated Plot:</h2>
-        <img id="plot-image" src="" alt="Generated Plot" style="display: none;">
     </div>
 
     <!-- Button to open the add column modal -->
@@ -120,6 +135,9 @@
 
     <!-- Link to external JavaScript file -->
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+    <!-- Include Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
 </body>
 </html>
 
