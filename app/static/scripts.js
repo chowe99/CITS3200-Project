@@ -1,5 +1,14 @@
 let selectedTableName = ""; // Variable to store the selected table name
 
+function showMessage(message, isSuccess, elementId) {
+  const messageArea = document.getElementById(elementId);
+  if (messageArea) {
+    messageArea.textContent = message;
+    messageArea.style.color = isSuccess ? "green" : "red";
+    messageArea.style.display = "block";
+  }
+}
+
 // JavaScript to handle table selection and plot form display
 document
   .getElementById("table-form")
@@ -81,28 +90,30 @@ document
     event.preventDefault();
 
     const formData = new FormData(event.target);
-    const x_axis_value = document.querySelector('select[name="x_axis"]').value; // Get the selected x-axis value
+    const x_axis_value = document.querySelector('select[name="x_axis"]').value;
 
     // Ensure x_axis value is not empty before appending
     if (x_axis_value) {
-      formData.append("x_axis", x_axis_value); // Ensure x_axis is added
+      formData.append("x_axis", x_axis_value);
     } else {
-      console.error("X-Axis value is missing");
-      alert("Please select an X-Axis value.");
+      showMessage("Please select an X-Axis value.", false, "plot-message-area");
       return;
     }
 
-    // Get all selected table names (since multiple selection is allowed)
+    // Get all selected table names
     const selectedTables = Array.from(
       document.getElementById("table-select").selectedOptions,
     ).map((option) => option.value);
 
-    // Ensure at least one table is selected before appending
+    // Ensure at least one table is selected
     if (selectedTables.length > 0) {
-      selectedTables.forEach((table) => formData.append("table_name[]", table)); // Append all selected table names
+      selectedTables.forEach((table) => formData.append("table_name[]", table));
     } else {
-      console.error("No tables selected");
-      alert("Please select at least one table.");
+      showMessage(
+        "Please select at least one table.",
+        false,
+        "plot-message-area",
+      );
       return;
     }
 
@@ -116,11 +127,15 @@ document
       if (data.graph_json) {
         const plotData = JSON.parse(data.graph_json);
         Plotly.react("plot-container", plotData.data, plotData.layout);
+        showMessage("Plot generated successfully.", true, "plot-message-area");
+      } else if (data.error) {
+        showMessage(data.error, false, "plot-message-area");
       } else {
-        alert(data.error);
+        showMessage("An unknown error occurred.", false, "plot-message-area");
       }
     } catch (error) {
       console.error("Error:", error);
+      showMessage("Error generating plot.", false, "plot-message-area");
     }
   });
 
@@ -135,6 +150,7 @@ document.getElementById("close-modal").addEventListener("click", function () {
   document.getElementById("add-column-modal").style.display = "none";
 });
 
+// Handle Add Column form submission asynchronously
 // Handle Add Column form submission asynchronously
 document
   .getElementById("add-column-form")
@@ -151,14 +167,21 @@ document
     })
       .then((response) => response.json())
       .then((data) => {
-        alert(data.message);
+        showMessage(data.message, data.success, "add-column-message-area");
         if (data.success) {
-          document.getElementById("add-column-modal").style.display = "none";
-          // Optionally refresh column checkboxes without full page reload
-          // or dynamically update the column list if possible
+          // Optionally refresh columns
+          // Hide modal if desired
+          // document.getElementById("add-column-modal").style.display = "none";
         }
       })
-      .catch((error) => console.error("Error:", error));
+      .catch((error) => {
+        console.error("Error:", error);
+        showMessage(
+          "An error occurred while adding the column.",
+          false,
+          "add-column-message-area",
+        );
+      });
   });
 
 function hideForms() {
@@ -242,3 +265,13 @@ document
         alert("An error occurred while uploading the file.");
       });
   });
+
+// Clear message when the upload form is changed
+document.getElementById("upload-form").addEventListener("change", function () {
+  showMessage("", true, "message-area"); // Clear the message area
+});
+
+// Clear plot messages when the plot form is changed
+document.getElementById("plot-form").addEventListener("change", function () {
+  showMessage("", true, "plot-message-area"); // Clear the plot message area
+});

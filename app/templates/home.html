@@ -1,21 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Query and Plot</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
+  </head>
+  <body>
+    <div id="message-area"></div>
     {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <ul class="flashes">
-          {% for message in messages %}
-            <li>{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
+    {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
     {% endwith %}
     <h1>Soil Database Tool</h1>
 
@@ -28,78 +29,78 @@
 
     <label for="form-select">Filter by:</label>
     <select id="form-select">
-        <option>Select an option</option>
-        <option value="table">Spreadsheet(s)</option>
-        <option value="instance">Instance(s)</option>
+      <option>Select an option</option>
+      <option value="table">Spreadsheet(s)</option>
+      <option value="instance">Instance(s)</option>
     </select>
 
     <div id = "spreadsheet-selection">
-        <form id="table-form">
-            <label for="table-select">Select table:</label>
-            <select id="table-select" name="table_name[]" multiple>
-                {% for table in tables %}
-                    <option value="{{ table }}">{{ table }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">Load column</button>
-        </form>
+      <form id="table-form">
+        <label for="table-select">Select table:</label>
+        <select id="table-select" name="table_name[]" multiple>
+          {% for table in tables %}
+          <option value="{{ table }}">{{ table }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Load column</button>
+      </form>
 
-        <div id = "table-form">
-            <p>To select multiple options: </p>
-            <ul>
-                <li>On <strong>Windows</strong>, hold the <strong>Ctrl</strong> key and click.</li>
-                <li>On <strong>Mac</strong>, hold the <strong>Cmd (⌘)</strong> key and click.</li>
-                <li>Hold the <strong>Shift</strong> key to select a range of adjacent options.</li>
-            </ul>
-        </div>
+      <div id = "table-form">
+        <p>To select multiple options: </p>
+        <ul>
+          <li>On <strong>Windows</strong>, hold the <strong>Ctrl</strong> key and click.</li>
+          <li>On <strong>Mac</strong>, hold the <strong>Cmd (⌘)</strong> key and click.</li>
+          <li>Hold the <strong>Shift</strong> key to select a range of adjacent options.</li>
+        </ul>
+      </div>
     </div>
 
     <div id = "instance-selection">
-        <form id="instance-form">
-            <label for="instance-select">Select instance:</label>
-            {% for key, values in instances.items() %}
-            <div>
-                <input type="checkbox" id="{{ key }}" name="instances" value="{{ key }}" onclick="toggleValueChecklist(this)">
-                <label for="{{ key }}">{{ key }}</label>
-                <div class="value-checklist" style="display: none;">
-                    {% for value in values %}
-                        <input type="checkbox" id="{{ value }}" name="{{ key }}_values" value="{{ value }}">
-                        <label for="{{ value }}">{{ value }}</label><br>
-                    {% endfor %}
-                </div>
-            </div>
+      <form id="instance-form">
+        <label for="instance-select">Select instance:</label>
+        {% for key, values in instances.items() %}
+        <div>
+          <input type="checkbox" id="{{ key }}" name="instances" value="{{ key }}" onclick="toggleValueChecklist(this)">
+          <label for="{{ key }}">{{ key }}</label>
+          <div class="value-checklist" style="display: none;">
+            {% for value in values %}
+            <input type="checkbox" id="{{ value }}" name="{{ key }}_values" value="{{ value }}">
+            <label for="{{ value }}">{{ value }}</label><br>
             {% endfor %}
-            <button type="submit">Load columns</button>
-            
-        </form>
+          </div>
+        </div>
+        {% endfor %}
+        <button type="submit">Load columns</button>
+
+      </form>
     </div>
 
     <!-- Plot form, hidden until a table is selected -->
     <form id="plot-form" style="display: none;">
-        <div>
-            <h3>Select X-Axis:</h3>
-            <select name="x_axis">
-                {% for column in x_axis_options %}
-                    <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
-                {% endfor %}
-            </select>
-        </div>
+      <div>
+        <h3>Select X-Axis:</h3>
+        <select name="x_axis">
+          {% for column in x_axis_options %}
+          <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
+          {% endfor %}
+        </select>
+      </div>
 
-        <div>
-            <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
-            <!-- Add ID to this div -->
-            <div id="y-axis-container">
-                {% for column in y_axis_options %}
-                    {% if column == 'p' %}
-                        <input type="checkbox" name="y_axis" value="{{ column }}"> p'<br>
-                    {% else %}
-                        <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
-                    {% endif %}
-                {% endfor %}
-            </div>
+      <div>
+        <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
+        <!-- Add ID to this div -->
+        <div id="y-axis-container">
+          {% for column in y_axis_options %}
+          {% if column == 'p' %}
+          <input type="checkbox" name="y_axis" value="{{ column }}"> p'<br>
+          {% else %}
+          <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
+          {% endif %}
+          {% endfor %}
         </div>
-
-        <button type="submit">Generate Plot</button>
+      </div>
+      <div id="plot-message-area"></div>
+      <button type="submit">Generate Plot</button>
     </form>
 
     <!-- Container to display the plot -->
@@ -112,25 +113,26 @@
 
     <!-- Modal for adding a new column -->
     <div id="add-column-modal" style="display: none;">
-        <h2>Add a New Column</h2>
-        <form id="add-column-form">
-            <label for="column-name">Column Name:</label>
-            <input type="text" id="column-name" name="column_name" required><br>
+      <h2>Add a New Column</h2>
+      <div id="add-column-message-area"></div>
+      <form id="add-column-form">
+        <label for="column-name">Column Name:</label>
+        <input type="text" id="column-name" name="column_name" required><br>
 
-            <label for="column-type">Column Data Type:</label>
-            <select id="column-type" name="column_type" required>
-                <option value="INTEGER">INTEGER</option>
-                <option value="REAL">REAL</option>
-                <option value="TEXT">TEXT</option>
-            </select><br>
+        <label for="column-type">Column Data Type:</label>
+        <select id="column-type" name="column_type" required>
+          <option value="INTEGER">INTEGER</option>
+          <option value="REAL">REAL</option>
+          <option value="TEXT">TEXT</option>
+        </select><br>
 
-            <label for="column-data">Enter Data (comma-separated) or Upload CSV:</label>
-            <textarea id="column-data" name="column_data"></textarea><br>
-            <input type="file" id="column-file" name="column_file" accept=".csv"><br>
+        <label for="column-data">Enter Data (comma-separated) or Upload CSV:</label>
+        <textarea id="column-data" name="column_data"></textarea><br>
+        <input type="file" id="column-file" name="column_file" accept=".csv"><br>
 
-            <button type="submit">Add Column</button>
-            <button type="button" id="close-modal">Cancel</button>
-        </form>
+        <button type="submit">Add Column</button>
+        <button type="button" id="close-modal">Cancel</button>
+      </form>
     </div>
 
     <!-- Link to external JavaScript file -->
@@ -138,6 +140,6 @@
     <!-- Include Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
-</body>
+  </body>
 </html>
 
