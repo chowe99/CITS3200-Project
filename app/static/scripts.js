@@ -193,3 +193,52 @@ function toggleValueChecklist(checkbox) {
     valueCheckboxes.forEach((cb) => (cb.checked = false));
   }
 }
+
+function refreshTableList() {
+  fetch("/get-tables")
+    .then((response) => response.json())
+    .then((data) => {
+      const tableSelect = document.getElementById("table-select");
+      tableSelect.innerHTML = ""; // Clear existing options
+      data.tables.forEach((table) => {
+        const option = document.createElement("option");
+        option.value = table;
+        option.textContent = table;
+        tableSelect.appendChild(option);
+      });
+    })
+    .catch((error) => {
+      console.error("Error fetching table list:", error);
+    });
+}
+
+// Handle the upload form submission
+document
+  .getElementById("upload-form")
+  .addEventListener("submit", function (event) {
+    event.preventDefault(); // Prevent the default form submission
+
+    const form = event.target;
+    const formData = new FormData(form);
+
+    fetch("/upload", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          // Display success message
+          alert(data.message);
+          // Refresh the table list
+          refreshTableList();
+        } else {
+          // Display error message
+          alert(data.message);
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        alert("An error occurred while uploading the file.");
+      });
+  });

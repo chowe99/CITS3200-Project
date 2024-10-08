@@ -32,65 +32,56 @@ main = Blueprint('main', __name__)
 
 DATABASE_PATH = 'app/updated_database/soil_test_results.db'
 
-UPLOAD_FOLDER = 'uploads'  
 ALLOWED_EXTENSIONS = {'xlsx'}
-
-# Ensure the upload folder exists
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def process_uploaded_file(file_path):
+def process_uploaded_file(file):
     try:
         sheet_name = '03 - Shearing'  # Adjust as necessary
-        df = data_extractor(file_path, sheet_name)
+        # Read the Excel file from the file object
+        df = data_extractor(file, sheet_name)
         if df.empty:
-            debug_print(f"No data found in file {file_path}.")
-            flash('Uploaded file contains no data.')
-            return
+            debug_print("Uploaded file contains no data.")
+            return {'success': False, 'message': 'Uploaded file contains no data.'}
         # Check for existing spreadsheet
-        name = os.path.basename(file_path).rsplit('.', 1)[0]
+        name = secure_filename(file.filename).rsplit('.', 1)[0]
         conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
         cursor.execute('SELECT COUNT(*) FROM spreadsheets WHERE spreadsheet_name = ?', (name,))
         if cursor.fetchone()[0] > 0:
             debug_print(f"Spreadsheet {name} already exists in the database.")
-            flash('Spreadsheet already exists in the database.')
             conn.close()
-            return
+            return {'success': False, 'message': 'Spreadsheet already exists in the database.'}
         conn.close()
         # Insert data
-        insert_data_to_db(file_path, sheet_name, df)
-        debug_print(f"Data from {file_path} has been inserted into the database.")
-        flash('File processed and data added to the database.')
+        insert_data_to_db(name, df)
+        debug_print(f"Data from {name} has been inserted into the database.")
+        return {'success': True, 'message': 'File processed and data added to the database.'}
     except Exception as e:
-        debug_print(f"Error processing file {file_path}: {str(e)}")
-        flash(f'Error processing file: {str(e)}')
+        debug_print(f"Error processing file {file.filename}: {str(e)}")
+        return {'success': False, 'message': f'Error processing file: {str(e)}'}
 
 
 @main.route('/upload', methods=['POST'])
 def upload_file():
     if 'excel_file' not in request.files:
-        flash('No file part')
-        return redirect(request.url)
+        return jsonify({'success': False, 'message': 'No file part in the request.'})
     file = request.files['excel_file']
     if file.filename == '':
-        flash('No selected file')
-        return redirect(request.url)
+        return jsonify({'success': False, 'message': 'No file selected.'})
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(file_path)
-        debug_print(f"File uploaded successfully: {file_path}")
-        # Process the uploaded file
-        process_uploaded_file(file_path)
-        flash('File processed and data added to the database.')
-        return redirect(url_for('main.home'))
+        debug_print(f"File uploaded successfully: {filename}")
+        # Process the uploaded file in memory
+        result = process_uploaded_file(file)
+        if result['success']:
+            return jsonify({'success': True, 'message': result['message']})
+        else:
+            return jsonify({'success': False, 'message': result['message']})
     else:
-        flash('Invalid file type. Only .xlsx files are allowed.')
-        return redirect(request.url)
+        return jsonify({'success': False, 'message': 'Invalid file type. Only .xlsx files are allowed.'})
 
 def get_tables():
     """Retrieve all table names from the database."""
@@ -164,6 +155,10 @@ def load_table():
         debug_print(f"Error loading table: {str(e)}")
         return jsonify({"success": False, "message": f"Error loading table: {str(e)}"})
 
+@main.route('/get-tables', methods=['GET'])
+def get_tables_endpoint():
+    tables = get_tables()
+    return jsonify({'tables': tables})
 
 @main.route('/plot', methods=['POST'])
 def plot():
