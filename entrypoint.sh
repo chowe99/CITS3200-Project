@@ -12,4 +12,5 @@ if ! mountpoint -q /mnt/nas; then
   exit 1
 fi
 
-exec flask run --host=0.0.0.0
+exec flask run --host=0.0.0.0 --port=5123
+
