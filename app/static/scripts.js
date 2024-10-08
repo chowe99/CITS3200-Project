@@ -1,31 +1,104 @@
 let selectedTableName = ""; // Variable to store the selected table name
 
-// JavaScript to handle table selection and plot form display
+function showMessage(message, isSuccess, elementId) {
+  const messageArea = document.getElementById(elementId);
+  if (messageArea) {
+    messageArea.textContent = message;
+    messageArea.style.color = isSuccess ? "green" : "red";
+    messageArea.style.display = "block";
+  }
+}
+
+// Handle table form submission
 document
   .getElementById("table-form")
   .addEventListener("submit", async function (event) {
     event.preventDefault();
 
     const formData = new FormData(event.target);
-    selectedTableNames = formData.getAll("table_name[]"); // Store the selected table name
+    const selectedTables = Array.from(
+      document.querySelectorAll('input[name="table_name[]"]:checked'),
+    ).map((checkbox) => checkbox.value);
+
+    if (selectedTables.length > 0) {
+      selectedTables.forEach((table) => formData.append("table_name[]", table));
+    } else {
+      alert("Please select at least one table.");
+      return;
+    }
+
     try {
       const response = await fetch("/load-table", {
         method: "POST",
         body: formData,
       });
       const data = await response.json();
-      console.log("AJAX Response Data:", data); // Debug log for response data
       if (data.success) {
-        // Show the plot form and update available columns
         document.getElementById("plot-form").style.display = "block";
-
-        // Update X-Axis and Y-Axis options with data from the selected table
         updatePlotOptions(data.x_axis_options, data.y_axis_options);
       } else {
         alert(data.message);
       }
     } catch (error) {
       console.error("Error:", error);
+    }
+  });
+
+// Handle plot form submission
+document
+  .getElementById("plot-form")
+  .addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const formData = new FormData(event.target);
+    const x_axis_value = document.querySelector('select[name="x_axis"]').value;
+
+    if (x_axis_value) {
+      formData.append("x_axis", x_axis_value);
+    } else {
+      showMessage("Please select an X-Axis value.", false, "plot-message-area");
+      return;
+    }
+
+    // Get all selected table names
+    const selectedTables = Array.from(
+      document.querySelectorAll('input[name="table_name[]"]:checked'),
+    ).map((checkbox) => checkbox.value);
+
+    if (selectedTables.length > 0) {
+      selectedTables.forEach((table) => formData.append("table_name[]", table));
+    } else {
+      showMessage(
+        "Please select at least one table.",
+        false,
+        "plot-message-area",
+      );
+      return;
+    }
+
+    // Get decryption password
+    const decryptPassword = document.getElementById("decrypt_password").value;
+    formData.append("decrypt_password", decryptPassword);
+
+    try {
+      const response = await fetch("/plot", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.graph_json) {
+        const plotData = JSON.parse(data.graph_json);
+        Plotly.react("plot-container", plotData.data, plotData.layout);
+        showMessage("Plot generated successfully.", true, "plot-message-area");
+      } else if (data.error) {
+        showMessage(data.error, false, "plot-message-area");
+      } else {
+        showMessage("An unknown error occurred.", false, "plot-message-area");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      showMessage("Error generating plot.", false, "plot-message-area");
     }
   });
 
@@ -81,28 +154,30 @@ document
     event.preventDefault();
 
     const formData = new FormData(event.target);
-    const x_axis_value = document.querySelector('select[name="x_axis"]').value; // Get the selected x-axis value
+    const x_axis_value = document.querySelector('select[name="x_axis"]').value;
 
     // Ensure x_axis value is not empty before appending
     if (x_axis_value) {
-      formData.append("x_axis", x_axis_value); // Ensure x_axis is added
+      formData.append("x_axis", x_axis_value);
     } else {
-      console.error("X-Axis value is missing");
-      alert("Please select an X-Axis value.");
+      showMessage("Please select an X-Axis value.", false, "plot-message-area");
       return;
     }
 
-    // Get all selected table names (since multiple selection is allowed)
+    // Get all selected table names
     const selectedTables = Array.from(
       document.getElementById("table-select").selectedOptions,
     ).map((option) => option.value);
 
-    // Ensure at least one table is selected before appending
+    // Ensure at least one table is selected
     if (selectedTables.length > 0) {
-      selectedTables.forEach((table) => formData.append("table_name[]", table)); // Append all selected table names
+      selectedTables.forEach((table) => formData.append("table_name[]", table));
     } else {
-      console.error("No tables selected");
-      alert("Please select at least one table.");
+      showMessage(
+        "Please select at least one table.",
+        false,
+        "plot-message-area",
+      );
       return;
     }
 
@@ -116,11 +191,15 @@ document
       if (data.graph_json) {
         const plotData = JSON.parse(data.graph_json);
         Plotly.react("plot-container", plotData.data, plotData.layout);
+        showMessage("Plot generated successfully.", true, "plot-message-area");
+      } else if (data.error) {
+        showMessage(data.error, false, "plot-message-area");
       } else {
-        alert(data.error);
+        showMessage("An unknown error occurred.", false, "plot-message-area");
       }
     } catch (error) {
       console.error("Error:", error);
+      showMessage("Error generating plot.", false, "plot-message-area");
     }
   });
 
@@ -135,6 +214,7 @@ document.getElementById("close-modal").addEventListener("click", function () {
   document.getElementById("add-column-modal").style.display = "none";
 });
 
+// Handle Add Column form submission asynchronously
 // Handle Add Column form submission asynchronously
 document
   .getElementById("add-column-form")
@@ -151,14 +231,21 @@ document
     })
       .then((response) => response.json())
       .then((data) => {
-        alert(data.message);
+        showMessage(data.message, data.success, "add-column-message-area");
         if (data.success) {
-          document.getElementById("add-column-modal").style.display = "none";
-          // Optionally refresh column checkboxes without full page reload
-          // or dynamically update the column list if possible
+          // Optionally refresh columns
+          // Hide modal if desired
+          // document.getElementById("add-column-modal").style.display = "none";
         }
       })
-      .catch((error) => console.error("Error:", error));
+      .catch((error) => {
+        console.error("Error:", error);
+        showMessage(
+          "An error occurred while adding the column.",
+          false,
+          "add-column-message-area",
+        );
+      });
   });
 
 function hideForms() {
@@ -216,7 +303,7 @@ function refreshTableList() {
 document
   .getElementById("upload-form")
   .addEventListener("submit", function (event) {
-    event.preventDefault(); // Prevent the default form submission
+    event.preventDefault();
 
     const form = event.target;
     const formData = new FormData(form);
@@ -242,3 +329,61 @@ document
         alert("An error occurred while uploading the file.");
       });
   });
+
+function refreshTableList() {
+  fetch("/get-tables")
+    .then((response) => response.json())
+    .then((data) => {
+      const tableCheckboxes = document.getElementById("table-checkboxes");
+      tableCheckboxes.innerHTML = ""; // Clear existing options
+      data.tables.forEach((table) => {
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.name = "table_name[]";
+        checkbox.value = table;
+
+        const label = document.createElement("label");
+        label.textContent = table;
+
+        tableCheckboxes.appendChild(checkbox);
+        tableCheckboxes.appendChild(label);
+        tableCheckboxes.appendChild(document.createElement("br"));
+      });
+    })
+    .catch((error) => {
+      console.error("Error fetching table list:", error);
+    });
+}
+
+// app/static/scripts.js
+
+function showSelectedForm() {
+  var selectedForm = document.getElementById("form-select").value;
+
+  if (selectedForm === "table") {
+    document.getElementById("spreadsheet-selection").style.display = "block";
+    document.getElementById("instance-selection").style.display = "none";
+  } else if (selectedForm === "instance") {
+    document.getElementById("spreadsheet-selection").style.display = "none";
+    document.getElementById("instance-selection").style.display = "block";
+  } else {
+    document.getElementById("spreadsheet-selection").style.display = "none";
+    document.getElementById("instance-selection").style.display = "none";
+  }
+}
+
+window.onload = showSelectedForm;
+
+document
+  .getElementById("form-select")
+  .addEventListener("change", showSelectedForm);
+
+// Clear message when the upload form is changed
+document.getElementById("upload-form").addEventListener("change", function () {
+  showMessage("", true, "message-area"); // Clear the message area
+});
+
+// Clear plot messages when the plot form is changed
+document.getElementById("plot-form").addEventListener("change", function () {
+  showMessage("", true, "plot-message-area"); // Clear the plot message area
+});

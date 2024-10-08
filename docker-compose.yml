@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   web:
     build: .
@@ -6,7 +5,10 @@ services:
       - "5000:5000"
     volumes:
       - .:/app
+      - "${NAS_MOUNT_PATH:-/mnt/nas}:/mnt/nas"  # Use an environment variable with a default
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=development
-      - FLASK_DEBUG=1  # Enable Flask debug mode
+      - FLASK_DEBUG=1
+      - DATABASE_PATH=/mnt/nas/soil_test_results.db  # Use environment variable in the app
+    

@@ -1,3 +1,5 @@
+# app/database/data_extraction.py
+
 import pandas as pd
 
 def data_extractor(file, sheet):
@@ -20,5 +22,4 @@ def data_extractor(file, sheet):
                   'induced_PWP', "p", 'q', 'e']
     df.loc[df['axial_strain'] < 0, 'axial_strain'] = 0
     return df
-
 
