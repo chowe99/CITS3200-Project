@@ -1,4 +1,5 @@
 # CITS3200-Project
-run `./start.sh [IRDS_DRIVE_PATH/DATABASE_FOLDER]`
-The database file should be named "soil\_test\_results.db", and the IRDS\_DRIVE\_PATH should be the the location of the IRDS Drive, with Cristina's directory provided as the database directory.
+run `./start.sh [IRDS_DRIVE_PATH]`
+example: `./start.sh smb://drive.irds.uwa.edu.au/RES-ENG-CITS3200-P000735`
+The database file should be named "soil\_test\_results.db" and located at the root of the IRDS directory.
 
