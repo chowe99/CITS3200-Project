@@ -5,7 +5,7 @@ services:
       - "5123:5123"
     volumes:
       - .:/app
-      - "${NAS_MOUNT_PATH:-/mnt/nas}:/mnt/nas"  # Use an environment variable with a default
+      - ${NAS_MOUNT_PATH}:/mnt/nas # Bind-mount the NAS_MOUNT_PATH to /mnt/irds in the container
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=development
@@ -16,4 +16,4 @@ services:
       interval: 2s
       timeout: 60s
       retries: 5
-    
+
