@@ -2,9 +2,8 @@
 
 # =============================================================================
 # Script: start.sh
-# Description: Installs necessary utilities, mounts an SMB/NAS share based on
-#              the host OS, sets the NAS_MOUNT_PATH, and starts the Docker
-#              container while handling cleanup on exit.
+# Description: Mounts an SMB/NAS share based on the host OS, sets the NAS_MOUNT_PATH,
+#              and starts the Docker container while handling cleanup on exit.
 # Usage: ./start.sh [SMB_PATH]
 #        - SMB_PATH: Optional argument to specify a custom SMB share path.
 #                  Default is "smb://drive.irds.uwa.edu.au/RES-ENG-CITS3200-P000735"
@@ -23,6 +22,17 @@ cleanup() {
 
 # Trap Ctrl+C (SIGINT) and call cleanup
 trap cleanup SIGINT
+
+# =============================================================================
+# Function: check_docker_daemon
+# Description: Checks if the Docker daemon is running.
+# =============================================================================
+check_docker_daemon() {
+    if ! docker info >/dev/null 2>&1; then
+        echo "Error: Docker daemon is not running. Please start Docker Desktop and try again."
+        exit 1
+    fi
+}
 
 # =============================================================================
 # Function: install_cifs_utils
@@ -51,14 +61,16 @@ install_cifs_utils() {
 
 # =============================================================================
 # Function: mount_linux
-# Description: Mounts the SMB share on Linux systems.
+# Description: Mounts the SMB share on Linux systems to /mnt/<SMB_SHARENAME>.
 # Arguments:
 #   $1 - SMB share path (e.g., //server/share)
-#   $2 - Mount point directory (e.g., /mnt/irds)
 # =============================================================================
 mount_linux() {
     local smb_share="$1"
-    local mount_point="$2"
+    
+    # Extract the share name from the SMB share path
+    share_name=$(echo "$smb_share" | awk -F/ '{print $NF}')
+    mount_point="/mnt/$share_name"
     
     # Install cifs-utils if necessary
     install_cifs_utils
@@ -71,6 +83,13 @@ mount_linux() {
         if [[ "$smb_share" != "//"* ]]; then
             smb_share="//${smb_share}"
         fi
+        # Create mount point directory
+        echo "Creating mount point at $mount_point..."
+        sudo mkdir -p "$mount_point"
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to create mount point at $mount_point."
+            exit 1
+        fi
         # Mount the SMB share as guest
         echo "Mounting SMB share $smb_share to $mount_point..."
         sudo mount.cifs "$smb_share" "$mount_point" -o vers=3.0,guest,uid=$(id -u),gid=$(id -g),file_mode=0775,dir_mode=0775
@@ -80,6 +99,9 @@ mount_linux() {
         fi
         echo "Mounted SMB share successfully on Linux."
     fi
+    
+    # Set NAS_MOUNT_PATH to the actual mount point
+    NAS_MOUNT_PATH="$mount_point"
 }
 
 # =============================================================================
@@ -114,18 +136,55 @@ mount_macos() {
 }
 
 # =============================================================================
+# Function: get_drive_letter
+# Description: Determines an available drive letter based on the share name.
+# Arguments:
+#   $1 - Share name
+# Output:
+#   Selected drive letter or exits if none are available.
+# =============================================================================
+get_drive_letter() {
+    local share_name="$1"
+    local desired_letter="${share_name:0:1}"  # First character of share name
+    desired_letter=$(echo "$desired_letter" | tr '[:lower:]' '[:upper:]')  # Uppercase
+    
+    # Ensure it's a letter A-Z
+    if [[ ! "$desired_letter" =~ ^[A-Z]$ ]]; then
+        desired_letter="Z"  # Default to Z if not a valid letter
+    fi
+    
+    # Check if the desired drive letter is available using PowerShell
+    available_letter=$(powershell -Command "
+        if (-not (Get-PSDrive -Name '$desired_letter' -ErrorAction SilentlyContinue)) {
+            '$desired_letter:'
+        } else {
+            $available = [char]('Z'..'A' | Where-Object { -not (Get-PSDrive -Name $_ -ErrorAction SilentlyContinue) } | Select-Object -First 1)
+            if ($available) { '$available:' } else { 'NONE' }
+        }
+    ")
+    
+    if [ "$available_letter" = "NONE" ]; then
+        echo "Error: No available drive letters to map the SMB share on Windows."
+        exit 1
+    fi
+    
+    echo "$available_letter"
+}
+
+# =============================================================================
 # Function: mount_windows
-# Description: Mounts the SMB share on Windows systems.
+# Description: Mounts the SMB share on Windows systems to a drive letter based on the share name.
 # Arguments:
 #   $1 - SMB share path (e.g., //server/share)
-#   $2 - Drive letter (e.g., Z:)
 # =============================================================================
 mount_windows() {
     local smb_share="$1"
-    local mount_drive="$2"
     
-    # Default drive letter if not specified
-    local drive_letter="${mount_drive:-Z:}"
+    # Extract the share name from the SMB share path
+    share_name=$(echo "$smb_share" | awk -F/ '{print $NF}')
+    
+    # Determine the drive letter based on the share name
+    drive_letter=$(get_drive_letter "$share_name")
     
     # Check if the drive is already mapped
     if net use "$drive_letter" >/dev/null 2>&1; then
@@ -133,9 +192,9 @@ mount_windows() {
         net use "$drive_letter" /delete
     fi
     
-    # Map the SMB share to the drive letter as guest
+    # Map the SMB share to the determined drive letter as guest using PowerShell
     echo "Mapping SMB share $smb_share to drive $drive_letter..."
-    net use "$drive_letter" "$smb_share" /user:guest /persistent:no
+    powershell -Command "New-SmbMapping -LocalPath '$drive_letter' -RemotePath '\\drive.irds.uwa.edu.au\RES-ENG-CITS3200-P000735' -Persist \$false"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to map SMB share on Windows."
         exit 1
@@ -189,14 +248,17 @@ SMB_SHARE=$(parse_smb_path "$SMB_PATH_INPUT")
 echo "Parsed SMB share: $SMB_SHARE"
 
 # =============================================================================
+# Check if Docker Daemon is Running
+# =============================================================================
+check_docker_daemon
+
+# =============================================================================
 # Detect Operating System and Mount SMB Share Accordingly
 # =============================================================================
 case "$OSTYPE" in
   linux*)
     echo "Detected Linux OS."
-    DEFAULT_MOUNT_POINT="/mnt/irds"
-    mount_linux "$SMB_SHARE" "$DEFAULT_MOUNT_POINT"
-    NAS_MOUNT_PATH="$DEFAULT_MOUNT_POINT"
+    mount_linux "$SMB_SHARE"
     ;;
   darwin*)
     echo "Detected macOS."
@@ -204,9 +266,7 @@ case "$OSTYPE" in
     ;;
   cygwin* | msys* | win32*)
     echo "Detected Windows OS."
-    # Specify the drive letter; default is Z:
-    DEFAULT_MOUNT_DRIVE="Z:"
-    mount_windows "$SMB_SHARE" "$DEFAULT_MOUNT_DRIVE"
+    mount_windows "$SMB_SHARE"
     ;;
   *)
     echo "Error: Unsupported OS type: $OSTYPE"
@@ -240,19 +300,31 @@ docker-compose up -d
 echo "Waiting for the Docker container to become healthy..."
 while true; do
     sleep 5
-    # Fetch the health status of the container
-    container_status=$(docker inspect --format='{{.State.Health.Status}}' cits3200-project-web-1 2>/dev/null)
+    # Fetch the health status of the container using service name instead of container name
+    service_name="web"  # Adjust this to match your docker-compose service name
+    container_id=$(docker-compose ps -q "$service_name")
+    
+    if [ -z "$container_id" ]; then
+        echo "Error: Service '$service_name' not found in docker-compose.yml."
+        exit 1
+    fi
+    
+    container_status=$(docker inspect --format='{{.State.Health.Status}}' "$container_id" 2>/dev/null)
     
     if [ "$container_status" = "healthy" ]; then
         echo "Docker container is healthy and running."
         break
     elif [ "$container_status" = "unhealthy" ]; then
         echo "Docker container is unhealthy. Check logs for details."
-        docker logs cits3200-project-web-1
+        docker logs "$container_id"
         exit 1
-    elif [ -z "$container_status" ]; then
-        echo "Error: Container 'cits3200-project-web-1' not found. Ensure the service name is correct."
-        exit 1
+    elif [ "$container_status" = "none" ]; then
+        # If no healthcheck is defined, consider it healthy once it's running
+        container_state=$(docker inspect --format='{{.State.Running}}' "$container_id" 2>/dev/null)
+        if [ "$container_state" = "true" ]; then
+            echo "Docker container is running."
+            break
+        fi
     else
         echo "Still waiting for container to become healthy..."
     fi
