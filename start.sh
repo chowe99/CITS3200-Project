@@ -179,28 +179,42 @@ get_drive_letter() {
 # =============================================================================
 mount_windows() {
     local smb_share="$1"
-    
+
     # Extract the share name from the SMB share path
     share_name=$(echo "$smb_share" | awk -F/ '{print $NF}')
-    
+
     # Determine the drive letter based on the share name
     drive_letter=$(get_drive_letter "$share_name")
-    
+
     # Check if the drive is already mapped
     if net use "$drive_letter" >/dev/null 2>&1; then
         echo "Drive $drive_letter is already in use. Unmapping..."
-        net use "$drive_letter" /delete
+        net use "$drive_letter" /delete /y
     fi
-    
-    # Map the SMB share to the determined drive letter as guest using PowerShell
-    echo "Mapping SMB share $smb_share to drive $drive_letter..."
-    powershell -Command "New-SmbMapping -LocalPath '$drive_letter' -RemotePath '\\drive.irds.uwa.edu.au\RES-ENG-CITS3200-P000735' -Persist \$false"
+
+    # Convert SMB share path to UNC path (\\server\share)
+    unc_path="\\\\$(echo "$smb_share" | sed 's/\//\\/g')"
+
+    # Check if SMB_USERNAME and SMB_PASSWORD are set
+    if [ -n "$SMB_USERNAME" ] && [ -n "$SMB_PASSWORD" ]; then
+        echo "Mapping SMB share with provided credentials..."
+        # Use PowerShell to create PSCredential
+        powershell -Command "
+            \$securePassword = ConvertTo-SecureString '$SMB_PASSWORD' -AsPlainText -Force;
+            \$credential = New-Object System.Management.Automation.PSCredential('$SMB_USERNAME', \$securePassword);
+            New-SmbMapping -LocalPath '$drive_letter' -RemotePath '$unc_path' -Credential \$credential -Persist \$false
+        "
+    else
+        echo "Mapping SMB share using existing credentials..."
+        powershell -Command "New-SmbMapping -LocalPath '$drive_letter' -RemotePath '$unc_path' -Persist \$false"
+    fi
+
     if [ $? -ne 0 ]; then
         echo "Error: Failed to map SMB share on Windows."
         exit 1
     fi
     echo "Mapped SMB share successfully on Windows."
-    
+
     # Set NAS_MOUNT_PATH to the drive letter
     NAS_MOUNT_PATH="${drive_letter}/"
 }
@@ -247,10 +261,6 @@ fi
 SMB_SHARE=$(parse_smb_path "$SMB_PATH_INPUT")
 echo "Parsed SMB share: $SMB_SHARE"
 
-# =============================================================================
-# Check if Docker Daemon is Running
-# =============================================================================
-check_docker_daemon
 
 # =============================================================================
 # Detect Operating System and Mount SMB Share Accordingly
@@ -280,6 +290,11 @@ echo "NAS_MOUNT_PATH is set to: $NAS_MOUNT_PATH"
 # Export NAS_MOUNT_PATH for Docker Compose
 # =============================================================================
 export NAS_MOUNT_PATH
+
+# =============================================================================
+# Check if Docker Daemon is Running
+# =============================================================================
+check_docker_daemon
 
 # =============================================================================
 # Check if NAS_MOUNT_PATH Exists (Only for Linux and macOS)
