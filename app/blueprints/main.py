@@ -26,6 +26,7 @@ import json
 import os
 from werkzeug.utils import secure_filename
 import hashlib
+import numpy as np
 
 # Set up basic logging configuration
 logging.basicConfig(level=logging.DEBUG)  # Set logging level to debug
@@ -219,7 +220,7 @@ def plot():
             title_name = "e vs log(p')"
         if preset == "calc_2":
             y_axis = ['q','p']
-            x_axis = 'axial strain'
+            x_axis = 'axial_strain'
             title_name = "q/p' vs axial strain"
         if preset == "calc_3":
             y_axis = ['q', 'p']
@@ -287,14 +288,19 @@ def plot():
         # Create a Plotly figure
         fig = go.Figure()
 
-        for y in y_axis:
+        if preset == "calc_1" or preset =="calc_2" or preset == "calc_3":
             for table_name in data['source'].unique():
                 table_data = data[data['source'] == table_name]
-    #            if preset == "calc_1":
-    #                table_data['p'] == 
-    #            if preset == "calc_2":
-                    
-                
+                if preset == "calc_1":
+                    y = "log(p')"
+                    table_data[y] == np.log(table_data['p'])
+                if preset == "calc_2":
+                    y = "q/p'"
+                    table_data[y] == table_data['q']/table_data['p']
+                if preset == "calc_3":
+                    qmax = table_data['q'].max()
+                    y = "qmax/p'"
+                    table_data[y] == qmax/ table_data['p']   
                 fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
@@ -307,9 +313,27 @@ def plot():
                         f"<b>{x_axis}</b>: %{{x}}<br>"
                         f"<b>Spreadsheet</b>: %{{text}}<br>"
                         "<extra></extra>"
-                    )
-                ))
-
+                        )
+                    ))
+        else:
+            for y in y_axis:
+                for table_name in data['source'].unique():
+                    table_data = data[data['source'] == table_name]
+                    fig.add_trace(go.Scatter(
+                        x=table_data[x_axis],
+                        y=table_data[y],
+                        mode='markers',
+                        name=f"{table_name} - {y}",
+                        marker=dict(color=color_map[table_name]),
+                        text=table_data['source'],
+                        hovertemplate=(
+                            f"<b>{y}</b>: %{{y}}<br>"
+                            f"<b>{x_axis}</b>: %{{x}}<br>"
+                            f"<b>Spreadsheet</b>: %{{text}}<br>"
+                            "<extra></extra>"
+                        )
+                    ))
+            
         # Customize the layout with legend
         fig.update_layout(
             title=title_name,
