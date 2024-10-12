@@ -4,16 +4,15 @@ services:
     ports:
       - "5123:5123"
     volumes:
-      - .:/app
-      - "${NAS_MOUNT_PATH:-/mnt/nas}:/mnt/nas"  # Use an environment variable with a default
+      - ".:/app"
+      - "${NAS_MOUNT_PATH}:/mnt/irds"  # Bind-mount the NAS_MOUNT_PATH to /mnt/irds in the container
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-      - DATABASE_PATH=/mnt/nas/soil_test_results.db  # Use environment variable in the app
+      - DATABASE_PATH=/mnt/irds/soil_test_results.db  # Use environment variable in the app
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:5123"]
       interval: 2s
-      timeout: 10s
+      timeout: 60s
       retries: 5
-    

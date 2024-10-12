@@ -107,6 +107,12 @@ def upload_file():
             if not result['success']:
                 return jsonify({'success': False, 'message': result['message']})
 
+             # Reset file pointer to read again for instance extraction
+            file.seek(0)
+            instances = find_instances(file)
+            if instances:
+                insert_instances_to_db(name, instances)
+
     return jsonify({'success': True, 'message': 'Files uploaded and processed successfully.'})
 
 @main.route('/')
@@ -165,12 +171,10 @@ def decrypt_value(encrypted_value, key, iv):
 @main.route('/plot', methods=['POST'])
 def plot():
     try:
-        table_names = request.form.getlist('table_name[]')
         x_axis = request.form.get('x_axis')
         y_axis = request.form.getlist('y_axis')
-
-        if not table_names:
-            return jsonify({"error": "Table name is missing from the request."}), 400
+        filtered_spreadsheet_ids = request.form.get('filtered_spreadsheet_ids')
+        decrypt_password = request.form.get('decrypt_password')
 
         if not x_axis:
             return jsonify({"error": "X-axis field is missing from the request."}), 400
@@ -178,19 +182,24 @@ def plot():
         if not y_axis:
             return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
 
-        # Get the decryption password once
-        decrypt_password = request.form.get('decrypt_password')
+        if not filtered_spreadsheet_ids:
+            return jsonify({"error": "No spreadsheets selected for plotting."}), 400
+
+        spreadsheet_ids = json.loads(filtered_spreadsheet_ids)
 
         # Fetch data using SQLAlchemy
         data_frames = []
-        colors = ['red', 'blue', 'green', 'orange', 'purple']  # Define colors for each table
+        colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow']  # Extended colors
         color_map = {}
 
-        for idx, table_name in enumerate(table_names):
-            spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=table_name).first()
+        for idx, spreadsheet_id in enumerate(spreadsheet_ids):
+            spreadsheet = Spreadsheet.query.get(spreadsheet_id)
             if not spreadsheet:
+                logger.debug(f"Spreadsheet ID {spreadsheet_id} not found.")
                 continue
+            table_name = spreadsheet.spreadsheet_name
             color_map[table_name] = colors[idx % len(colors)]  # Map table name to a color
+
             if spreadsheet.encrypted:
                 if not decrypt_password:
                     return jsonify({"error": f"Password required for spreadsheet '{table_name}'."}), 401
@@ -206,26 +215,38 @@ def plot():
                         encrypted_value = getattr(row, col)
                         if encrypted_value:
                             decrypted_value = decrypt_value(encrypted_value, key, iv)
-                            decrypted_row[col] = round(float(decrypted_value), 4)
+                            try:
+                                decrypted_row[col] = round(float(decrypted_value), 4)
+                            except ValueError:
+                                decrypted_row[col] = None
                         else:
                             decrypted_row[col] = None
                     decrypted_row['source'] = table_name
                     data.append(decrypted_row)
                 df = pd.DataFrame(data)
+                # Drop rows with NaN in x_axis
+                df.dropna(subset=[x_axis], inplace=True)
                 data_frames.append(df)
             else:
                 rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
                 if not rows:
+                    logger.debug(f"No rows found for spreadsheet '{table_name}'.")
                     continue
-                df = pd.DataFrame([row.__dict__ for row in rows])
+                data_dicts = []
+                for row in rows:
+                    row_dict = {col: getattr(row, col) for col in [x_axis] + y_axis}
+                    row_dict['source'] = table_name
+                    data_dicts.append(row_dict)
+                df = pd.DataFrame(data_dicts)
                 for col in [x_axis] + y_axis:
                     if col in df.columns:
                         df[col] = pd.to_numeric(df[col], errors='coerce').round(4)
-                df['source'] = table_name
+                # Drop rows with NaN in x_axis
+                df.dropna(subset=[x_axis], inplace=True)
                 data_frames.append(df)
 
         if not data_frames:
-            return jsonify({"error": "No data found for the selected tables."}), 404
+            return jsonify({"error": "No data found for the selected spreadsheets."}), 404
 
         data = pd.concat(data_frames, ignore_index=True)
 
@@ -233,12 +254,12 @@ def plot():
         fig = go.Figure()
 
         for y in y_axis:
-            for table_name in table_names:
+            for table_name in data['source'].unique():
                 table_data = data[data['source'] == table_name]
                 fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
-                    mode='markers+lines',
+                    mode='markers',
                     name=f"{table_name} - {y}",
                     marker=dict(color=color_map[table_name]),
                     text=table_data['source'],
@@ -253,8 +274,8 @@ def plot():
         # Customize the layout with legend
         fig.update_layout(
             title='Interactive Plot',
-            xaxis_title=x_axis,
-            yaxis_title=', '.join(y_axis),
+            xaxis_title=x_axis.replace('_', ' ').capitalize(),
+            yaxis_title=', '.join([col.replace('_', ' ').capitalize() for col in y_axis]),
             legend_title="Source Tables",
             hovermode='closest',
             xaxis=dict(
@@ -282,71 +303,63 @@ def plot():
         return jsonify({"graph_json": graph_json})
 
     except Exception as e:
+        logger.exception(f"Error during plotting: {str(e)}")
         return jsonify({"error": f"Error during plotting: {str(e)}"}), 500
-@main.route('/add-column', methods=['POST'])
-def add_column():
-    column_name = request.form['column_name']
-    column_type = request.form['column_type']
-    column_data = request.form.get('column_data', '')
-    file = request.files.get('column_file')
-    spreadsheet_name = request.form.get('spreadsheet_name')
-    password = request.form.get('password')
 
-    # Validate required fields
-    if not column_name or not column_type or not spreadsheet_name:
-        return jsonify({"message": "Column name, type, and spreadsheet name are required.", "success": False})
+@main.route('/add-data', methods=['GET', 'POST'])
+def add_data():
+    if request.method == 'POST':
+        # Get CSV data from form input or file
+        csv_data = request.form.get('csv_data')
+        csv_file = request.files.get('csv_file')
 
-    # Fetch the spreadsheet
-    spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=spreadsheet_name).first()
-    if not spreadsheet:
-        return jsonify({"message": "Spreadsheet not found.", "success": False})
+        if not csv_data and not csv_file:
+            return jsonify({'success': False, 'message': 'No data provided.'})
 
-    # If the spreadsheet is encrypted, verify the password
-    if spreadsheet.encrypted:
-        if not password:
-            return jsonify({"message": "Password is required for encrypted spreadsheets.", "success": False})
-        if not verify_password(spreadsheet.password_salt, spreadsheet.password_hash, password):
-            return jsonify({"message": "Incorrect password.", "success": False})
+        # Read the CSV data into a DataFrame
+        if csv_file and csv_file.filename != '':
+            csv_file.seek(0)
+            df = pd.read_csv(csv_file)
+        elif csv_data:
+            from io import StringIO
+            df = pd.read_csv(StringIO(csv_data))
+        else:
+            return jsonify({'success': False, 'message': 'No data provided.'})
 
-    # Prepare data from textarea or CSV file
-    data_list = []
-    if file:
-        # Read data from uploaded CSV file
-        file_data = file.read().decode('utf-8')
-        reader = csv.reader(file_data.splitlines())
-        data_list = [row[0] for row in reader]
-    elif column_data:
-        # Read data from the textarea, split by commas
-        data_list = column_data.split(',')
+        # Create or get the 'custom_input' spreadsheet
+        spreadsheet_name = 'custom_input'
+        spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=spreadsheet_name).first()
+        if not spreadsheet:
+            spreadsheet = Spreadsheet(spreadsheet_name=spreadsheet_name, encrypted=False)
+            db.session.add(spreadsheet)
+            db.session.commit()
 
-    # Convert data to the appropriate type
-    if column_type == 'INTEGER':
-        data_list = [int(value) for value in data_list]
-    elif column_type == 'REAL':
-        data_list = [float(value) for value in data_list]
-    else:
-        data_list = [str(value) for value in data_list]
+        # Insert data into the database
+        standard_columns = ['time_start_of_stage', 'shear_induced_PWP', 'axial_strain',
+                            'vol_strain', 'induced_PWP', 'p', 'q', 'e']
 
-    try:
-        # Fetch the rows associated with the spreadsheet
-        rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
-
-        # Check if the number of data points matches the number of rows
-        if len(data_list) != len(rows):
-            return jsonify({"message": "Data length does not match number of rows.", "success": False})
-
-        # Add the new data to the 'extra_data' JSON field
-        for i, row in enumerate(rows):
-            if not row.extra_data:
-                row.extra_data = {}
-            row.extra_data[column_name] = data_list[i]
-            db.session.add(row)
-
+        rows = []
+        for _, row in df.iterrows():
+            data = {}
+            extra_data = {}
+            for column in df.columns:
+                value = str(row[column]) if pd.notnull(row[column]) else ''
+                if column in standard_columns:
+                    data[column] = value
+                else:
+                    extra_data[column] = value
+            row_entry = SpreadsheetRow(
+                spreadsheet_id=spreadsheet.spreadsheet_id,
+                **data,
+                extra_data=extra_data
+            )
+            rows.append(row_entry)
+        db.session.bulk_save_objects(rows)
         db.session.commit()
-        return jsonify({"message": f"Column '{column_name}' added successfully to spreadsheet '{spreadsheet_name}'.", "success": True})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"message": f"Error adding column: {str(e)}", "success": False})
+        flash('Data added successfully.', 'success')
+        return redirect(url_for('main.home'))
+    else:
+        return render_template('add_data.html')
 
 
 @main.route('/view-data', methods=['POST'])
@@ -386,4 +399,122 @@ def view_data():
 def get_tables_route():
     tables = get_tables()
     return jsonify({'tables': tables})
+
+@main.route('/load-instances', methods=['POST'])
+def load_instances():
+    try:
+        # Retrieve instances from the form data
+        instances_json = request.form.get('instances')
+        if not instances_json:
+            return jsonify({"success": False, "message": "No instances provided."})
+
+        instances = json.loads(instances_json)
+
+        # Find spreadsheets that match the selected instances and values
+        matching_spreadsheet_ids = set()
+        for instance in instances:
+            name = instance['name']
+            values = instance['values']
+            # Find instance IDs that match the name and selected values
+            instance_ids = Instance.query.filter(
+                Instance.instance_name == name,
+                Instance.instance_value.in_(values)
+            ).with_entities(Instance.instance_id).all()
+            if not instance_ids:
+                continue
+            instance_ids = [i[0] for i in instance_ids]
+            # Find spreadsheets associated with these instances
+            spreadsheet_ids = SpreadsheetInstance.query.filter(
+                SpreadsheetInstance.instance_id.in_(instance_ids)
+            ).with_entities(SpreadsheetInstance.spreadsheet_id).all()
+            spreadsheet_ids = [si[0] for si in spreadsheet_ids]
+            if not matching_spreadsheet_ids:
+                matching_spreadsheet_ids.update(spreadsheet_ids)
+            else:
+                # Intersection to ensure spreadsheets match all selected instances
+                matching_spreadsheet_ids.intersection_update(spreadsheet_ids)
+
+        if not matching_spreadsheet_ids:
+            return jsonify({"success": False, "message": "No spreadsheets match the selected instances."})
+
+        # Retrieve column options
+        columns = get_columns()
+        x_axis_options = [col for col in columns if col != "spreadsheet_id"]
+        y_axis_options = [col for col in columns if col not in ["spreadsheet_id", "time_start_of_stage", "id"]]
+
+        return jsonify({
+            "success": True,
+            "x_axis_options": x_axis_options,
+            "y_axis_options": y_axis_options,
+            "filtered_spreadsheet_ids": list(matching_spreadsheet_ids)
+        })
+
+    except Exception as e:
+        logger.debug(f"Error loading instances: {str(e)}")
+        return jsonify({"success": False, "message": f"Error loading instances: {str(e)}"})
+
+
+@main.route('/load-filters', methods=['POST'])
+def load_filters():
+    try:
+        # Get filter type
+        filter_type = request.form.get('filter_type', 'both')
+
+        # Get selected tables
+        selected_tables = request.form.getlist('table_name[]')
+        selected_spreadsheet_query = Spreadsheet.query
+
+        if selected_tables:
+            # Filter spreadsheets by selected table names
+            selected_spreadsheet_query = selected_spreadsheet_query.filter(
+                Spreadsheet.spreadsheet_name.in_(selected_tables)
+            )
+
+        # Get instances from the form data
+        instances_json = request.form.get('instances', '[]')  # Default to empty list if not provided
+
+        logger.debug(f"Selected Tables: {selected_tables}")
+        logger.debug(f"Instances JSON: {instances_json}")
+        logger.debug(f"Filter Type: {filter_type}")
+
+        try:
+            instances = json.loads(instances_json)
+        except json.JSONDecodeError:
+            instances = []
+
+        if instances:
+            # Apply instance filters
+            for instance in instances:
+                name = instance['name']
+                values = instance['values']
+                selected_spreadsheet_query = selected_spreadsheet_query.filter(
+                    Spreadsheet.instances.any(
+                        and_(
+                            Instance.instance_name == name,
+                            Instance.instance_value.in_(values)
+                        )
+                    )
+                )
+
+        # Execute the query to get the final list of spreadsheet IDs
+        final_spreadsheet_ids = [s.spreadsheet_id for s in selected_spreadsheet_query.all()]
+
+        if not final_spreadsheet_ids:
+            return jsonify({"success": False, "message": "No spreadsheets match the selected filters."})
+
+        # Retrieve column options
+        columns = get_columns()
+        x_axis_options = [col for col in columns if col != "spreadsheet_id"]
+        y_axis_options = [col for col in columns if col not in ["spreadsheet_id", "time_start_of_stage", "id"]]
+
+        return jsonify({
+            "success": True,
+            "x_axis_options": x_axis_options,
+            "y_axis_options": y_axis_options,
+            "filtered_spreadsheet_ids": list(final_spreadsheet_ids)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error loading filters: {str(e)}")
+        return jsonify({"success": False, "message": f"Error loading filters: {str(e)}"})
 

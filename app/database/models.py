@@ -1,5 +1,6 @@
 # app/database/models.py
 
+from sqlalchemy.dialects.sqlite import JSON
 from .connection import db
 
 class Spreadsheet(db.Model):
@@ -28,6 +29,7 @@ class SpreadsheetRow(db.Model):
     p = db.Column(db.Text)
     q = db.Column(db.Text)
     e = db.Column(db.Text)
+    extra_data = db.Column(JSON)  # Add this line
 
 class Instance(db.Model):
     __tablename__ = 'instances'
@@ -42,15 +44,3 @@ class SpreadsheetInstance(db.Model):
     spreadsheet_id = db.Column(db.Integer, db.ForeignKey('spreadsheets.spreadsheet_id'), nullable=False)
     instance_id = db.Column(db.Integer, db.ForeignKey('instances.instance_id'), nullable=False)
 
-class AddedColumn(db.Model):
-    __tablename__ = 'added_columns'
-    id = db.Column(db.Integer, primary_key=True)
-    # Existing columns
-    # New columns can be stored as key-value pairs or JSON
-
-class AddedColumnData(db.Model):
-    __tablename__ = 'added_column_data'
-    id = db.Column(db.Integer, primary_key=True)
-    added_column_id = db.Column(db.Integer, db.ForeignKey('added_columns.id'), nullable=False)
-    column_name = db.Column(db.String, nullable=False)
-    value = db.Column(db.String)  # Or use appropriate data type

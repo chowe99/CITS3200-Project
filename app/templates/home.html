@@ -33,43 +33,41 @@
 
     <label for="form-select">Filter by:</label>
     <select id="form-select">
-      <option value="table" selected>Spreadsheet(s)</option>
+      <option value="table">Spreadsheet(s)</option>
       <option value="instance">Instance(s)</option>
+      <option value="both" selected>Both</option>
     </select>
 
-    <div id="spreadsheet-selection">
-      <form id="table-form">
+    <form id="filter-form">
+      <div id="spreadsheet-selection">
         <label>Select table(s):</label>
         <div id="table-checkboxes">
           {% for table in tables %}
           <input type="checkbox" name="table_name[]" value="{{ table }}"> {{ table }}<br>
           {% endfor %}
         </div>
-        <label for="password">Decryption Password:</label>
-        <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
-        <button type="submit">Load columns</button>
-      </form>
-    </div>
+      </div>
 
-    <div id = "instance-selection">
-      <form id="instance-form">
-        <label for="instance-select">Select instance:</label>
+      <div id="instance-selection">
+        <label for="instance-select">Select instance(s):</label>
         {% for key, values in instances.items() %}
         <div>
           <input type="checkbox" id="{{ key }}" name="instances" value="{{ key }}" onclick="toggleValueChecklist(this)">
           <label for="{{ key }}">{{ key }}</label>
           <div class="value-checklist" style="display: none;">
             {% for value in values %}
-            <input type="checkbox" id="{{ value }}" name="{{ key }}_values" value="{{ value }}">
-            <label for="{{ value }}">{{ value }}</label><br>
+            <input type="checkbox" id="{{ key }}_{{ value }}" name="{{ key }}_values" value="{{ value }}">
+            <label for="{{ key }}_{{ value }}">{{ value }}</label><br>
             {% endfor %}
           </div>
         </div>
         {% endfor %}
-        <button type="submit">Load columns</button>
+      </div>
 
-      </form>
-    </div>
+      <label for="decrypt_password">Decryption Password:</label>
+      <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
+      <button type="submit">Load Data</button>
+    </form>
 
     <!-- Plot form, hidden until a table is selected -->
     <form id="plot-form" style="display: none;">
@@ -95,6 +93,7 @@
           {% endfor %}
         </div>
       </div>
+      <input type="hidden" id="filtered-spreadsheet-ids" name="filtered_spreadsheet_ids" value="">
       <div id="plot-message-area"></div>
       <button type="submit">Generate Plot</button>
     </form>

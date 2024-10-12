@@ -7,8 +7,8 @@ set -x  # Print commands and their arguments as they are executed
 # flask db upgrade
 
 # Check if NAS is mounted
-if ! mountpoint -q /mnt/nas; then
-  echo "NAS drive is not mounted at /mnt/nas. Please mount the NAS drive and restart the container."
+if ! mountpoint -q /mnt/irds; then
+  echo "NAS drive is not mounted at /mnt/irds. Please mount the NAS drive and restart the container."
   exit 1
 fi
 
