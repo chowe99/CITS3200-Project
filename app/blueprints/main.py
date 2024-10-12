@@ -177,6 +177,7 @@ def upload_file():
                         password_hash=password_hash
                     )
                     db.session.add(spreadsheet)
+                    db.session.commit()
                     logger.debug(f"Added Spreadsheet object for {name} to the session.")
 
                     result = insert_data_to_db(
