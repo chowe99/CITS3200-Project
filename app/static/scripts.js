@@ -173,11 +173,16 @@ document
 
     const formData = new FormData(event.target);
     const x_axis_value = document.querySelector('select[name="x_axis"]').value;
+    const preset_value = document.querySelector('select[name="preset-options"]').value;
 
     // Ensure x_axis value is not empty before appending
     if (x_axis_value) {
       formData.append("x_axis", x_axis_value);
-    } else {
+    } 
+    if (preset_value) {
+      formData.append("preset-options", preset_value)
+    }
+    else {
       await showMessage(
         "Please select an X-Axis value.",
         false,

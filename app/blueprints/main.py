@@ -176,14 +176,17 @@ def plot():
         filtered_spreadsheet_ids = request.form.get('filtered_spreadsheet_ids')
         decrypt_password = request.form.get('decrypt_password')
 
-        if not x_axis:
-            return jsonify({"error": "X-axis field is missing from the request."}), 400
+        preset = request.form.get('preset-options')
 
-        if not y_axis:
-            return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
+        if preset == "None":
+            if not x_axis:
+                return jsonify({"error": "X-axis field is missing from the request."}), 400
 
-        if not filtered_spreadsheet_ids:
-            return jsonify({"error": "No spreadsheets selected for plotting."}), 400
+            if not y_axis:
+                return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
+
+            if not filtered_spreadsheet_ids:
+                return jsonify({"error": "No spreadsheets selected for plotting."}), 400
 
         spreadsheet_ids = json.loads(filtered_spreadsheet_ids)
 
@@ -192,6 +195,37 @@ def plot():
         colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow']  # Extended colors
         color_map = {}
 
+        # Default title name which changes when a preset-option is chosen
+        title_name = 'Interactive Plot'
+
+        # Non-calculated preset options
+        if preset == "non_calc_1":
+            y_axis = ['p', 'q', 'induced_PWP']
+            x_axis = 'axial_strain'
+            title_name = """p', q, induced PWP vs axial strain"""
+        if preset == "non_calc_2":
+            y_axis = ['p']
+            x_axis = 'q'
+            title_name = """q vs p'"""
+        if preset == "non_calc_3":
+            y_axis = ['axial_strain']
+            x_axis = 'vol_strain'
+            title_name = "Vol strain vs axial strain"
+        
+        # Calculated preset options
+        if preset == "calc_1":
+            y_axis = ['p']
+            x_axis = 'e'
+            title_name = "e vs log(p')"
+        if preset == "calc_2":
+            y_axis = ['q','p']
+            x_axis = 'axial strain'
+            title_name = "q/p' vs axial strain"
+        if preset == "calc_3":
+            y_axis = ['q', 'p']
+            x_axis = 'p'
+            title_name = "qmax/p' vs p'"
+        
         for idx, spreadsheet_id in enumerate(spreadsheet_ids):
             spreadsheet = Spreadsheet.query.get(spreadsheet_id)
             if not spreadsheet:
@@ -256,6 +290,11 @@ def plot():
         for y in y_axis:
             for table_name in data['source'].unique():
                 table_data = data[data['source'] == table_name]
+    #            if preset == "calc_1":
+    #                table_data['p'] == 
+    #            if preset == "calc_2":
+                    
+                
                 fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
@@ -273,7 +312,7 @@ def plot():
 
         # Customize the layout with legend
         fig.update_layout(
-            title='Interactive Plot',
+            title=title_name,
             xaxis_title=x_axis.replace('_', ' ').capitalize(),
             yaxis_title=', '.join([col.replace('_', ' ').capitalize() for col in y_axis]),
             legend_title="Source Tables",
