@@ -52,7 +52,7 @@
         <label for="instance-select">Select instance(s):</label>
         {% for key, values in instances.items() %}
         <div>
-          <input type="checkbox" id="{{ key }}" name="instances" value="{{ key }}" onclick="toggleValueChecklist(this)">
+          <input type="checkbox" id="{{ key }}" name="instance_names" value="{{ key }}" onclick="toggleValueChecklist(this)">
           <label for="{{ key }}">{{ key }}</label>
           <div class="value-checklist" style="display: none;">
             {% for value in values %}

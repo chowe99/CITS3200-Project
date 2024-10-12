@@ -9,6 +9,8 @@ from app.database import (
     get_tables,
     get_instances,
     get_columns,
+    Instance,
+    SpreadsheetInstance,
     Spreadsheet,
     SpreadsheetRow,
     db
@@ -579,6 +581,9 @@ def load_instances():
 @main.route('/load-filters', methods=['POST'])
 def load_filters():
     try:
+        # Log the entire form data for debugging
+        logger.debug(f"Received form data: {request.form.to_dict()}")
+
         # Get filter type
         filter_type = request.form.get('filter_type', 'both')
 
@@ -593,15 +598,14 @@ def load_filters():
             )
 
         # Get instances from the form data
-        instances_json = request.form.get('instances', '[]')  # Default to empty list if not provided
-
-        logger.debug(f"Selected Tables: {selected_tables}")
-        logger.debug(f"Instances JSON: {instances_json}")
-        logger.debug(f"Filter Type: {filter_type}")
+        instances_json = request.form.get('instances_json', '[]')  # Now reading 'instances_json'
+        logger.debug(f"Instances JSON raw: {instances_json}")
 
         try:
             instances = json.loads(instances_json)
-        except json.JSONDecodeError:
+            logger.debug(f"Parsed instances: {instances}")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decoding error for instances: {e}")
             instances = []
 
         if instances:
@@ -609,6 +613,7 @@ def load_filters():
             for instance in instances:
                 name = instance['name']
                 values = instance['values']
+                logger.debug(f"Applying filter - Name: {name}, Values: {values}")
                 selected_spreadsheet_query = selected_spreadsheet_query.filter(
                     Spreadsheet.instances.any(
                         and_(
@@ -620,10 +625,10 @@ def load_filters():
 
         # Execute the query to get the final list of spreadsheet IDs
         final_spreadsheet_ids = [s.spreadsheet_id for s in selected_spreadsheet_query.all()]
-
-        logger.debug(f"Final Spreadsheet IDs: {final_spreadsheet_ids}")
+        logger.debug(f"Final Spreadsheet IDs after filtering: {final_spreadsheet_ids}")
 
         if not final_spreadsheet_ids:
+            logger.info("No spreadsheets match the selected filters.")
             return jsonify({"success": False, "message": "No spreadsheets match the selected filters."})
 
         # Retrieve column options
@@ -641,3 +646,4 @@ def load_filters():
     except Exception as e:
         logger.exception(f"Error loading filters: {str(e)}")
         return jsonify({"success": False, "message": f"Error loading filters: {str(e)}"})
+

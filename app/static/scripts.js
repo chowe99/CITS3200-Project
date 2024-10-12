@@ -73,6 +73,7 @@ document
   .getElementById("filter-form")
   .addEventListener("submit", async function (event) {
     event.preventDefault();
+    console.log("Filter form submitted.");
 
     const formData = new FormData(event.target);
 
@@ -80,29 +81,38 @@ document
     const selectedTables = Array.from(
       document.querySelectorAll('input[name="table_name[]"]:checked'),
     ).map((checkbox) => checkbox.value);
+    console.log("Selected Tables:", selectedTables);
 
     // Collect selected instances and their values
     const instances = [];
-    document.querySelectorAll('input[name="instances"]').forEach((checkbox) => {
-      const instanceName = checkbox.value;
-      const selectedValues = [];
-      document
-        .querySelectorAll(`input[name="${instanceName}_values"]:checked`)
-        .forEach((valueCheckbox) => {
-          selectedValues.push(valueCheckbox.value);
-        });
-      if (selectedValues.length > 0) {
-        instances.push({ name: instanceName, values: selectedValues });
-      }
-    });
+    document
+      .querySelectorAll('input[name="instance_names"]:checked')
+      .forEach((checkbox) => {
+        const instanceName = checkbox.value;
+        const selectedValues = [];
+        document
+          .querySelectorAll(`input[name="${instanceName}_values"]:checked`)
+          .forEach((valueCheckbox) => {
+            selectedValues.push(valueCheckbox.value);
+          });
+        if (selectedValues.length > 0) {
+          instances.push({ name: instanceName, values: selectedValues });
+        }
+      });
+    console.log("Collected Instances:", instances);
 
     // Include selected tables and instances in form data
     selectedTables.forEach((table) => formData.append("table_name[]", table));
-    formData.append("instances", JSON.stringify(instances));
+    formData.append("instances_json", JSON.stringify(instances));
+    console.log(
+      "FormData 'instances_json' appended as:",
+      JSON.stringify(instances),
+    );
 
     // Determine which filters are applied based on user's selection
     const filterType = document.getElementById("form-select").value;
     formData.append("filter_type", filterType);
+    console.log("Filter Type:", filterType);
 
     try {
       const response = await fetch("/load-filters", {
@@ -110,6 +120,7 @@ document
         body: formData,
       });
       const data = await response.json();
+      console.log("Response from /load-filters:", data);
       if (data.success) {
         // Update plot options and display plot form
         document.getElementById("plot-form").style.display = "block";
@@ -119,6 +130,7 @@ document
         const filteredSpreadsheetIds = data.filtered_spreadsheet_ids;
         const hiddenInput = document.getElementById("filtered-spreadsheet-ids");
         hiddenInput.value = JSON.stringify(filteredSpreadsheetIds);
+        console.log("Filtered Spreadsheet IDs:", filteredSpreadsheetIds);
       } else {
         await showMessage(data.message, false, "message-area");
       }
@@ -283,6 +295,8 @@ document
   });
 
 // Show add columns when button is clicked
-document.getElementById("add-column-btn").addEventListener("click", function() {
-document.getElementById("add-column-modal").style.display = "block"; // Show the modal
-});
+document
+  .getElementById("add-column-btn")
+  .addEventListener("click", function () {
+    document.getElementById("add-column-modal").style.display = "block"; // Show the modal
+  });
