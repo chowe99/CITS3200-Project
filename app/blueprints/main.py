@@ -259,7 +259,7 @@ def plot():
                 fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
-                    mode='markers+lines',
+                    mode='markers',
                     name=f"{table_name} - {y}",
                     marker=dict(color=color_map[table_name]),
                     text=table_data['source'],
