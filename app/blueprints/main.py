@@ -9,6 +9,8 @@ from app.database import (
     get_tables,
     get_instances,
     get_columns,
+    Instance,
+    SpreadsheetInstance,
     Spreadsheet,
     SpreadsheetRow,
     db
@@ -70,9 +72,12 @@ def release_lock():
 
 
 # Set up basic logging configuration
-logging.basicConfig(level=logging.DEBUG)  # Set logging level to debug
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s:%(name)s:%(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
-
 
 main = Blueprint('main', __name__)
 
@@ -102,73 +107,123 @@ def verify_password(stored_salt, stored_hash, password_attempt):
     return pwd_hash == stored_hash
 
 
+# app/blueprints/main.py
+
 @main.route('/upload', methods=['POST'])
 def upload_file():
+    logger.info("Received upload request.")
+    
     # Attempt to acquire the lock before writing
     if not acquire_lock():
-        return jsonify({'success': False, 'message': 'Database is currently being updated by another user. Please try again later.'}), 423
+        logger.warning("Lock acquisition failed. Another upload is in progress.")
+        return jsonify({
+            'success': False,
+            'message': 'Database is currently being updated by another user. Please try again later.'
+        }), 423
+
+    logger.debug("Lock acquired successfully.")
 
     try:
         password = request.form.get('encrypt_password')
         encrypt_data = bool(password)
+        logger.debug(f"Encryption password provided: {'Yes' if encrypt_data else 'No'}")
 
         if 'excel_files' not in request.files:
+            logger.error("No 'excel_files' part in the request.")
             return jsonify({'success': False, 'message': 'No file part in the request.'})
 
         files = request.files.getlist('excel_files')
+        logger.debug(f"Number of files received: {len(files)}")
 
         if not files:
+            logger.error("No files selected for upload.")
             return jsonify({'success': False, 'message': 'No file selected.'})
 
-        # Begin a transaction
-        with db.session.begin():
-            for file in files:
-                if allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    sheet_name = '03 - Shearing'  # Adjust as necessary
-                    df = data_extractor(file, sheet_name)
-                    name = filename.rsplit('.', 1)[0]
+        success_files = []
+        failed_files = []
 
-                    if encrypt_data:
-                        # Encryption logic here
-                        salt = os.urandom(16)
-                        iv = os.urandom(16)
-                        key = derive_key(password, salt)
-                        password_salt, password_hash = hash_password(password)
+        # Begin a transaction for each file individually
+        for idx, file in enumerate(files, start=1):
+            if allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                logger.info(f"Processing file {idx}/{len(files)}: {filename}")
 
-                        spreadsheet = Spreadsheet(
-                            spreadsheet_name=name,
-                            public=False,
-                            encrypted=True,
-                            key_salt=salt,
-                            iv=iv,
-                            password_salt=password_salt,
-                            password_hash=password_hash
-                        )
-                        db.session.add(spreadsheet)
-                        # Removed commit here
+                sheet_name = '03 - Shearing'  # Adjust as necessary
+                df = data_extractor(file, sheet_name)
 
-                        result = insert_data_to_db(
-                            name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
-                        )
-                    else:
-                        result = insert_data_to_db(name, df)
+                if df.empty:
+                    logger.warning(f"No valid data extracted from file: {filename}")
+                    failed_files.append({'filename': filename, 'reason': 'No valid data extracted.'})
+                    continue  # Skip to the next file
 
-                    if not result['success']:
-                        # Rollback the entire transaction if any insert fails
-                        db.session.rollback()
-                        return jsonify({'success': False, 'message': result['message']})
+                name = filename.rsplit('.', 1)[0]
+                logger.debug(f"Spreadsheet name derived: {name}")
 
-                    # Reset file pointer to read again for instance extraction
-                    file.seek(0)
-                    instances = find_instances(file)
-                    if instances:
+                if encrypt_data:
+                    logger.debug("Encryption enabled for this file.")
+                    # Encryption logic here
+                    salt = os.urandom(16)
+                    iv = os.urandom(16)
+                    key = derive_key(password, salt)
+                    password_salt, password_hash = hash_password(password)
+
+                    spreadsheet = Spreadsheet(
+                        spreadsheet_name=name,
+                        public=False,
+                        encrypted=True,
+                        key_salt=salt,
+                        iv=iv,
+                        password_salt=password_salt,
+                        password_hash=password_hash
+                    )
+                    db.session.add(spreadsheet)
+                    logger.debug(f"Added Spreadsheet object for {name} to the session.")
+
+                    result = insert_data_to_db(
+                        name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
+                    )
+                else:
+                    logger.debug("Encryption not enabled for this file.")
+                    result = insert_data_to_db(name, df)
+
+                if not result['success']:
+                    logger.error(f"Failed to insert data for file: {filename}. Reason: {result['message']}")
+                    failed_files.append({'filename': filename, 'reason': result['message']})
+                    db.session.rollback()  # Rollback current file's transaction
+                else:
+                    logger.info(f"Successfully inserted data for file: {filename}")
+                    success_files.append(filename)
+
+                # Reset file pointer to read again for instance extraction
+                file.seek(0)
+                instances = find_instances(file)
+                logger.debug(f"Found {len(instances)} instances in file: {filename}")
+
+                if instances:
+                    try:
                         insert_instances_to_db(name, instances)
+                        logger.info(f"Inserted instances for file: {filename}")
+                    except Exception as e:
+                        logger.error(f"Failed to insert instances for file: {filename}. Reason: {str(e)}")
+                        failed_files.append({'filename': filename, 'reason': 'Failed to insert instances.'})
+                        db.session.rollback()  # Rollback current file's transaction
 
-        # If all inserts succeed, commit the transaction
-        db.session.commit()
+                db.session.commit()  # Commit after each file
 
-        return jsonify({'success': True, 'message': 'Files uploaded and processed successfully.'})
+        if success_files and not failed_files:
+            message = f"All files uploaded and processed successfully: {', '.join(success_files)}."
+            logger.info(message)
+            return jsonify({'success': True, 'message': message})
+        elif success_files and failed_files:
+            success_message = f"Successfully processed files: {', '.join(success_files)}."
+            failure_message = "; ".join([f"{f['filename']} failed: {f['reason']}" for f in failed_files])
+            combined_message = f"{success_message} {failure_message}"
+            logger.warning(combined_message)
+            return jsonify({'success': True, 'message': combined_message})
+        else:
+            failure_message = "; ".join([f"{f['filename']} failed: {f['reason']}" for f in failed_files])
+            logger.error(failure_message)
+            return jsonify({'success': False, 'message': failure_message}), 500
 
     except Exception as e:
         logger.exception(f"Error during upload: {e}")
@@ -179,6 +234,7 @@ def upload_file():
     finally:
         # Ensure the lock is released even if an error occurs
         release_lock()
+        logger.debug("Lock released after upload attempt.")
 
 @main.route('/')
 def home():
@@ -525,6 +581,9 @@ def load_instances():
 @main.route('/load-filters', methods=['POST'])
 def load_filters():
     try:
+        # Log the entire form data for debugging
+        logger.debug(f"Received form data: {request.form.to_dict()}")
+
         # Get filter type
         filter_type = request.form.get('filter_type', 'both')
 
@@ -539,15 +598,14 @@ def load_filters():
             )
 
         # Get instances from the form data
-        instances_json = request.form.get('instances', '[]')  # Default to empty list if not provided
-
-        logger.debug(f"Selected Tables: {selected_tables}")
-        logger.debug(f"Instances JSON: {instances_json}")
-        logger.debug(f"Filter Type: {filter_type}")
+        instances_json = request.form.get('instances_json', '[]')  # Now reading 'instances_json'
+        logger.debug(f"Instances JSON raw: {instances_json}")
 
         try:
             instances = json.loads(instances_json)
-        except json.JSONDecodeError:
+            logger.debug(f"Parsed instances: {instances}")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decoding error for instances: {e}")
             instances = []
 
         if instances:
@@ -555,6 +613,7 @@ def load_filters():
             for instance in instances:
                 name = instance['name']
                 values = instance['values']
+                logger.debug(f"Applying filter - Name: {name}, Values: {values}")
                 selected_spreadsheet_query = selected_spreadsheet_query.filter(
                     Spreadsheet.instances.any(
                         and_(
@@ -566,10 +625,10 @@ def load_filters():
 
         # Execute the query to get the final list of spreadsheet IDs
         final_spreadsheet_ids = [s.spreadsheet_id for s in selected_spreadsheet_query.all()]
-
-        logger.debug(f"Final Spreadsheet IDs: {final_spreadsheet_ids}")
+        logger.debug(f"Final Spreadsheet IDs after filtering: {final_spreadsheet_ids}")
 
         if not final_spreadsheet_ids:
+            logger.info("No spreadsheets match the selected filters.")
             return jsonify({"success": False, "message": "No spreadsheets match the selected filters."})
 
         # Retrieve column options
@@ -587,3 +646,4 @@ def load_filters():
     except Exception as e:
         logger.exception(f"Error loading filters: {str(e)}")
         return jsonify({"success": False, "message": f"Error loading filters: {str(e)}"})
+
