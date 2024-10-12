@@ -37,7 +37,11 @@ def insert_data_to_db(name, df, spreadsheet=None, encrypt=False, encryption_key=
                 spreadsheet = Spreadsheet(spreadsheet_name=name, encrypted=encrypt)
                 db.session.add(spreadsheet)
                 db.session.flush()  # Flush to assign spreadsheet_id
-                logger.debug(f"Added Spreadsheet '{name}' with ID {spreadsheet.spreadsheet_id} to the session.")
+                if spreadsheet.spreadsheet_id is None:
+                    logger.error(f"Failed to assign spreadsheet_id for '{name}'. The spreadsheet_id is None after flush.")
+                    raise ValueError(f"Spreadsheet ID is None for '{name}'.")
+                else:
+                    logger.debug(f"Added Spreadsheet '{name}' with ID {spreadsheet.spreadsheet_id} to the session.")
 
             rows = []
             for idx, row in df.iterrows():
@@ -48,6 +52,10 @@ def insert_data_to_db(name, df, spreadsheet=None, encrypt=False, encryption_key=
                         data[column] = encrypt_value(value, encryption_key, iv)
                     else:
                         data[column] = value
+
+                if spreadsheet.spreadsheet_id is None:
+                    logger.error(f"Spreadsheet ID is None for '{name}'. Cannot insert rows.")
+                    raise ValueError(f"Spreadsheet ID is None for '{name}'. Cannot insert rows.")
 
                 row_entry = SpreadsheetRow(
                     spreadsheet_id=int(spreadsheet.spreadsheet_id),

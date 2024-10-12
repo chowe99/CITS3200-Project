@@ -33,6 +33,16 @@ def create_app():
 
     with app.app_context():
         db.create_all()  # Create tables if they don't exist
+            # Integrity Check
+        try:
+            from sqlalchemy import text
+            result = db.session.execute(text("PRAGMA integrity_check;")).fetchone()
+            if result[0] == "ok":
+                logger.info("Database integrity check passed.")
+            else:
+                logger.error(f"Database integrity check failed: {result[0]}")
+        except Exception as e:
+            logger.exception(f"Failed to perform database integrity check: {e}")
 
     return app
 

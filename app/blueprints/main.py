@@ -343,6 +343,8 @@ def plot():
             logger.debug(f"Processing Spreadsheet '{table_name}' with color '{color_map[table_name]}'.")
 
             if spreadsheet.encrypted:
+                logger.debug(f"Spreadsheet '{table_name}' is encrypted. Attempting decryption.")
+
                 if not decrypt_password:
                     logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'.")
                     return jsonify({"error": f"Password required for spreadsheet '{table_name}'."}), 401
@@ -369,8 +371,9 @@ def plot():
                     data.append(decrypted_row)
                 df = pd.DataFrame(data)
                 df = df.dropna(subset=[x_axis])
-                logger.debug(f"Decrypted and cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
                 data_frames.append(df)
+                logger.debug(f"Decrypted and cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
+
             else:
                 rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
                 if not rows:
