@@ -42,30 +42,39 @@ def find_instances(file):
 
     return instances
 
-def insert_instances_to_db(spreadsheet_name, instances_data):
-    spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=spreadsheet_name).first()
-    if not spreadsheet:
-        return {'success': False, 'message': 'Spreadsheet not found.'}
+def insert_instances_to_db(name, instances):
+    try:
+        for instance_name, instance_value in instances.items():
+            # Fetch or create the Instance object
+            instance_obj = Instance.query.filter_by(
+                instance_name=instance_name,
+                instance_value=instance_value
+            ).first()
 
-    for key, value in instances_data.items():
-        # Check if the instance already exists
-        instance = Instance.query.filter_by(instance_name=key, instance_value=value).first()
-        if not instance:
-            instance = Instance(instance_name=key, instance_value=value)
-            db.session.add(instance)
+            if not instance_obj:
+                instance_obj = Instance(
+                    instance_name=instance_name,
+                    instance_value=instance_value
+                )
+                db.session.add(instance_obj)
+                logger.debug(f"Added new instance: {instance_name} - {instance_value}")
 
-        # Create a link between the spreadsheet and the instance
-        existing_link = SpreadsheetInstance.query.filter_by(
-            spreadsheet_id=spreadsheet.spreadsheet_id,
-            instance_id=instance.instance_id
-        ).first()
+            # Create association with Spreadsheet
+            spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=name).first()
+            if spreadsheet:
+                association = SpreadsheetInstance(
+                    spreadsheet_id=spreadsheet.spreadsheet_id,
+                    instance_id=instance_obj.instance_id
+                )
+                db.session.add(association)
+                logger.debug(f"Associated instance '{instance_name} - {instance_value}' with spreadsheet '{name}'.")
+            else:
+                logger.error(f"Spreadsheet '{name}' not found for associating instances.")
 
-        if not existing_link:
-            spreadsheet_instance = SpreadsheetInstance(
-                spreadsheet_id=spreadsheet.spreadsheet_id,
-                instance_id=instance.instance_id
-            )
-            db.session.add(spreadsheet_instance)
-    db.session.commit()
-    return {'success': True, 'message': 'Instances inserted successfully.'}
+        # Do NOT commit here
+        logger.debug(f"Instances inserted for spreadsheet: {name}")
+
+    except Exception as e:
+        logger.exception(f"Error inserting instances into the database: {e}")
+        raise  # Propagate exception to handle it in the calling function
 
