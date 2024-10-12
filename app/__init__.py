@@ -1,4 +1,7 @@
+# app/__init__.py
+
 import os
+import logging
 from flask import Flask
 from app.blueprints.main import main
 from app.database import db
@@ -7,7 +10,16 @@ def create_app():
     app = Flask(__name__)
     app.secret_key = 'your_secret_key'
 
-    # Use the database at /mnt/nas/soil_test_results.db
+    # Centralized Logging Configuration
+    logging.basicConfig(
+        level=logging.DEBUG,  # Set to DEBUG for detailed logs; change to INFO or WARNING in production
+        format='%(asctime)s %(levelname)s:%(name)s:%(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    logger = logging.getLogger(__name__)
+    logger.info("Starting Flask application.")
+
+    # Use the database at /mnt/irds/soil_test_results.db
     db_path = os.environ.get('DATABASE_PATH', '/mnt/nas/soil_test_results.db')
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
@@ -21,6 +33,16 @@ def create_app():
 
     with app.app_context():
         db.create_all()  # Create tables if they don't exist
+            # Integrity Check
+        try:
+            from sqlalchemy import text
+            result = db.session.execute(text("PRAGMA integrity_check;")).fetchone()
+            if result[0] == "ok":
+                logger.info("Database integrity check passed.")
+            else:
+                logger.error(f"Database integrity check failed: {result[0]}")
+        except Exception as e:
+            logger.exception(f"Failed to perform database integrity check: {e}")
 
     return app
 
