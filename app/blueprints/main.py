@@ -280,7 +280,13 @@ def plot():
         y_axis = request.form.getlist('y_axis')
         selected_tables = request.form.getlist('table_name[]')
         instances_json = request.form.get('instances_json')
-        decrypt_password = request.form.get('decrypt_password')
+        
+        # Collect decryption passwords from the form
+        decrypt_passwords = {}
+        for table_name in selected_tables:
+            password_field = f"password_{table_name}"
+            decrypt_passwords[table_name] = request.form.get(password_field)
+
 
         logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
@@ -345,7 +351,9 @@ def plot():
 
             if spreadsheet.encrypted:
                 logger.debug(f"Spreadsheet '{table_name}' is encrypted. Attempting decryption.")
-
+                
+                # Retrieve the corresponding password for this encrypted spreadsheet
+                decrypt_password = decrypt_passwords.get(table_name)
                 if not decrypt_password:
                     logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'.")
                     return jsonify({"error": f"Password required for spreadsheet '{table_name}'."}), 401

@@ -32,15 +32,25 @@
     </form>
 
     <form id="filter-form">
-      <!-- Spreadsheets selection -->
-      <div id="spreadsheet-selection">
-        <label>Select table(s):</label>
-        <div id="table-checkboxes">
-          {% for table in tables %}
-          <input type="checkbox" name="table_name[]" value="{{ table }}"> {{ table }}<br>
-          {% endfor %}
+
+    <!-- Spreadsheets selection -->
+    <div id="spreadsheet-selection">
+      <label>Select table(s):</label>
+      <div id="table-checkboxes">
+        {% for table in tables %}
+        <div>
+          <!-- Checkbox for table selection -->
+          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> {{ table.spreadsheet_name }}<br>
+          
+          <!-- Conditional password input for encrypted tables -->
+          {% if table.encrypted %}
+          <label for="password_{{ table.spreadsheet_name }}">Password for {{ table.spreadsheet_name }}:</label>
+          <input type="password" id="password_{{ table.spreadsheet_name }}" name="password_{{ table.spreadsheet_name }}" placeholder="Password"><br>
+          {% endif %}
         </div>
+        {% endfor %}
       </div>
+    </div>
 
       <!-- Instances selection -->
       <div id="instance-selection">
