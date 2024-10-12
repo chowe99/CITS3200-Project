@@ -15,7 +15,11 @@ class Spreadsheet(db.Model):
     password_salt = db.Column(db.LargeBinary, nullable=True)  # Add this line
     password_hash = db.Column(db.LargeBinary, nullable=True)
     rows = db.relationship('SpreadsheetRow', backref='spreadsheet', lazy=True)
-    instances = db.relationship('SpreadsheetInstance', backref='spreadsheet', lazy=True)
+    instances = db.relationship(
+        'Instance',
+        secondary='spreadsheet_instances',
+        backref=db.backref('spreadsheets', lazy='dynamic')
+    )
 
 class SpreadsheetRow(db.Model):
     __tablename__ = 'spreadsheet_rows'
@@ -36,7 +40,6 @@ class Instance(db.Model):
     instance_id = db.Column(db.Integer, primary_key=True)
     instance_name = db.Column(db.String, nullable=False)
     instance_value = db.Column(db.String, nullable=False)
-    spreadsheet_instances = db.relationship('SpreadsheetInstance', backref='instance', lazy=True)
 
 class SpreadsheetInstance(db.Model):
     __tablename__ = 'spreadsheet_instances'

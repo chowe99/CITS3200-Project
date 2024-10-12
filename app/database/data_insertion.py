@@ -25,7 +25,6 @@ def insert_data_to_db(name, df, spreadsheet=None, encrypt=False, encryption_key=
 
         spreadsheet = Spreadsheet(spreadsheet_name=name, encrypted=encrypt)
         db.session.add(spreadsheet)
-        db.session.commit()
 
     rows = []
     for _, row in df.iterrows():
@@ -43,6 +42,5 @@ def insert_data_to_db(name, df, spreadsheet=None, encrypt=False, encryption_key=
         )
         rows.append(row_entry)
     db.session.bulk_save_objects(rows)
-    db.session.commit()
     return {'success': True, 'message': 'Data inserted successfully.'}
 

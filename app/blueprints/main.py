@@ -24,8 +24,50 @@ import plotly.graph_objs as go
 import csv
 import json
 import os
+import time
 from werkzeug.utils import secure_filename
 import hashlib
+from sqlalchemy import and_, or_
+
+
+LOCKFILE_PATH = '/mnt/irds/lockfile.lock'  # Path to the lock file on the NAS
+
+def acquire_lock(timeout=30, max_lock_age=300, check_interval=1):
+    """Attempt to acquire a lock by creating a lockfile.
+       If the lockfile is older than max_lock_age seconds, override it."""
+    start_time = time.time()
+    while True:
+        try:
+            # Attempt to create the lock file exclusively
+            fd = os.open(LOCKFILE_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            # Write the current timestamp to the lock file
+            with os.fdopen(fd, 'w') as f:
+                f.write(str(time.time()))
+            # Lock acquired
+            return True
+        except FileExistsError:
+            # Lock file exists, check its age
+            lock_age = time.time() - os.path.getmtime(LOCKFILE_PATH)
+            if lock_age > max_lock_age:
+                # Assume the lock is stale and override it
+                print("Stale lock detected. Overriding the lock.")
+                try:
+                    os.remove(LOCKFILE_PATH)
+                except FileNotFoundError:
+                    continue  # Another process might have removed it
+            else:
+                # Check if timeout has been reached
+                if time.time() - start_time > timeout:
+                    return False
+                time.sleep(check_interval)
+
+def release_lock():
+    """Release the lock by deleting the lockfile."""
+    try:
+        os.remove(LOCKFILE_PATH)
+    except FileNotFoundError:
+        pass  # Lock file already removed
+
 
 # Set up basic logging configuration
 logging.basicConfig(level=logging.DEBUG)  # Set logging level to debug
@@ -59,61 +101,84 @@ def verify_password(stored_salt, stored_hash, password_attempt):
     pwd_hash = hashlib.pbkdf2_hmac('sha256', password_attempt.encode(), stored_salt, 100000)
     return pwd_hash == stored_hash
 
+
 @main.route('/upload', methods=['POST'])
 def upload_file():
-    password = request.form.get('encrypt_password')
-    encrypt_data = bool(password)
+    # Attempt to acquire the lock before writing
+    if not acquire_lock():
+        return jsonify({'success': False, 'message': 'Database is currently being updated by another user. Please try again later.'}), 423
 
-    if 'excel_files' not in request.files:
-        return jsonify({'success': False, 'message': 'No file part in the request.'})
+    try:
+        password = request.form.get('encrypt_password')
+        encrypt_data = bool(password)
 
-    files = request.files.getlist('excel_files')
-    
-    if not files:
-        return jsonify({'success': False, 'message': 'No file selected.'})
+        if 'excel_files' not in request.files:
+            return jsonify({'success': False, 'message': 'No file part in the request.'})
 
-    for file in files:
-        if allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            sheet_name = '03 - Shearing'  # Adjust as necessary
-            df = data_extractor(file, sheet_name)
-            name = filename.rsplit('.', 1)[0]
+        files = request.files.getlist('excel_files')
 
-            if encrypt_data:
-                # Encryption logic here
-                salt = os.urandom(16)
-                iv = os.urandom(16)
-                key = derive_key(password, salt)
-                password_salt, password_hash = hash_password(password)
+        if not files:
+            return jsonify({'success': False, 'message': 'No file selected.'})
 
-                spreadsheet = Spreadsheet(
-                    spreadsheet_name=name,
-                    public=False,
-                    encrypted=True,
-                    key_salt=salt,
-                    iv=iv,
-                    password_salt=password_salt,
-                    password_hash=password_hash
-                )
-                db.session.add(spreadsheet)
-                db.session.commit()
+        # Begin a transaction
+        with db.session.begin():
+            for file in files:
+                if allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    sheet_name = '03 - Shearing'  # Adjust as necessary
+                    df = data_extractor(file, sheet_name)
+                    name = filename.rsplit('.', 1)[0]
 
-                result = insert_data_to_db(
-                    name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
-                )
-            else:
-                result = insert_data_to_db(name, df)
-            
-            if not result['success']:
-                return jsonify({'success': False, 'message': result['message']})
+                    if encrypt_data:
+                        # Encryption logic here
+                        salt = os.urandom(16)
+                        iv = os.urandom(16)
+                        key = derive_key(password, salt)
+                        password_salt, password_hash = hash_password(password)
 
-             # Reset file pointer to read again for instance extraction
-            file.seek(0)
-            instances = find_instances(file)
-            if instances:
-                insert_instances_to_db(name, instances)
+                        spreadsheet = Spreadsheet(
+                            spreadsheet_name=name,
+                            public=False,
+                            encrypted=True,
+                            key_salt=salt,
+                            iv=iv,
+                            password_salt=password_salt,
+                            password_hash=password_hash
+                        )
+                        db.session.add(spreadsheet)
+                        # Removed commit here
 
-    return jsonify({'success': True, 'message': 'Files uploaded and processed successfully.'})
+                        result = insert_data_to_db(
+                            name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
+                        )
+                    else:
+                        result = insert_data_to_db(name, df)
+
+                    if not result['success']:
+                        # Rollback the entire transaction if any insert fails
+                        db.session.rollback()
+                        return jsonify({'success': False, 'message': result['message']})
+
+                    # Reset file pointer to read again for instance extraction
+                    file.seek(0)
+                    instances = find_instances(file)
+                    if instances:
+                        insert_instances_to_db(name, instances)
+
+        # If all inserts succeed, commit the transaction
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': 'Files uploaded and processed successfully.'})
+
+    except Exception as e:
+        logger.exception(f"Error during upload: {e}")
+        # Rollback in case of unexpected errors
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An unexpected error occurred.'}), 500
+
+    finally:
+        # Ensure the lock is released even if an error occurs
+        release_lock()
 
 @main.route('/')
 def home():
@@ -241,6 +306,9 @@ def plot():
                 for col in [x_axis] + y_axis:
                     if col in df.columns:
                         df[col] = pd.to_numeric(df[col], errors='coerce').round(4)
+                    else:
+                        logger.warning(f"Column {col} not found in spreadsheet {table_name}")
+                        df[col] = None
                 # Drop rows with NaN in x_axis
                 df.dropna(subset=[x_axis], inplace=True)
                 data_frames.append(df)
@@ -499,6 +567,8 @@ def load_filters():
         # Execute the query to get the final list of spreadsheet IDs
         final_spreadsheet_ids = [s.spreadsheet_id for s in selected_spreadsheet_query.all()]
 
+        logger.debug(f"Final Spreadsheet IDs: {final_spreadsheet_ids}")
+
         if not final_spreadsheet_ids:
             return jsonify({"success": False, "message": "No spreadsheets match the selected filters."})
 
@@ -511,10 +581,9 @@ def load_filters():
             "success": True,
             "x_axis_options": x_axis_options,
             "y_axis_options": y_axis_options,
-            "filtered_spreadsheet_ids": list(final_spreadsheet_ids)
+            "filtered_spreadsheet_ids": final_spreadsheet_ids
         })
 
     except Exception as e:
         logger.exception(f"Error loading filters: {str(e)}")
         return jsonify({"success": False, "message": f"Error loading filters: {str(e)}"})
-
