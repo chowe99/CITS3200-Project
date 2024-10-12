@@ -281,3 +281,8 @@ document
   .addEventListener("change", async function () {
     await showMessage("", true, "plot-message-area"); // Clear the plot message area
   });
+
+// Show add columns when button is clicked
+document.getElementById("add-column-btn").addEventListener("click", function() {
+document.getElementById("add-column-modal").style.display = "block"; // Show the modal
+});
