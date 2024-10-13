@@ -29,6 +29,8 @@ import os
 import time
 from werkzeug.utils import secure_filename
 import hashlib
+
+import numpy as np
 from sqlalchemy import and_, or_
 
 
@@ -287,17 +289,23 @@ def plot():
             password_field = f"password_{table_name}"
             decrypt_passwords[table_name] = request.form.get(password_field)
 
+        preset = request.form.get('preset-options')
+
+        if preset == "None":
+            # Input validation
+            if not x_axis:
+                logger.error("Missing X-axis in plot request.")
+                return jsonify({"error": "X-axis field is missing from the request."}), 400
+
+            if not y_axis:
+                logger.error("No Y-axis selected in plot request.")
+                return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
+              
+            if not filtered_spreadsheet_ids:
+                return jsonify({"error": "No spreadsheets selected for plotting."}), 400
 
         logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
-        # Input validation
-        if not x_axis:
-            logger.error("Missing X-axis in plot request.")
-            return jsonify({"error": "X-axis field is missing from the request."}), 400
-
-        if not y_axis:
-            logger.error("No Y-axis selected in plot request.")
-            return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
 
         # Process selected tables and instances to get spreadsheet IDs
         spreadsheet_ids = set()
@@ -340,6 +348,32 @@ def plot():
         colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow']  # Extended colors
         color_map = {}
 
+        selected_y_columns = y_axis # This variable is for containing manually selected y_axis which will be 
+                                    #used if calculated preset options are selected 
+
+        # Non-calculated preset options
+        # Columns in preset options get added to y_axis
+        if preset == "non_calc_1":
+            y_axis = ['p', 'q', 'induced_PWP'] + y_axis
+            x_axis = 'axial_strain'
+        if preset == "non_calc_2":
+            y_axis = ['q'] + y_axis
+            x_axis = 'p'
+        if preset == "non_calc_3":
+            y_axis = ['vol_strain'] + y_axis
+            x_axis = 'axial_strain'
+        
+        # Calculated preset options
+        if preset == "calc_1":
+            y_axis = ['e'] + y_axis
+            x_axis = 'p'
+        if preset == "calc_2":
+            y_axis = ['q','p'] + y_axis
+            x_axis = 'axial_strain'
+        if preset == "calc_3":
+            y_axis = ['q', 'p'] + y_axis
+            x_axis = 'p'
+        
         for idx, spreadsheet_id in enumerate(spreadsheet_ids):
             spreadsheet = Spreadsheet.query.get(spreadsheet_id)
             if not spreadsheet:
@@ -414,10 +448,36 @@ def plot():
         # Create a Plotly figure
         fig = go.Figure()
 
-        for y in y_axis:
+        if preset == "calc_1" or preset =="calc_2" or preset == "calc_3":
             for table_name in data['source'].unique():
                 table_data = data[data['source'] == table_name]
+                if preset == "calc_1": 
+                    y_preset = 'e' #Swap x-axis and y-axis (just for this option)
+                    x_axis = "log(p')"
+                    table_data[x_axis] = np.log(table_data['p'])
+                if preset == "calc_2":
+                    y_preset = "q/p'"
+                    table_data[y_preset] = table_data['q']/table_data['p']
+                if preset == "calc_3":
+                    qmax = table_data['q'].max()
+                    y_preset = "qmax/p'"
+                    table_data[y_preset] = qmax/ table_data['p']   
                 fig.add_trace(go.Scatter(
+                    x=table_data[x_axis],
+                    y=table_data[y_preset],
+                    mode='markers',
+                    name=f"{table_name} - {y_preset}",
+                    marker=dict(color=color_map[table_name]),
+                    text=table_data['source'],
+                    hovertemplate=(
+                        f"<b>{y_preset}</b>: %{{y}}<br>"
+                        f"<b>{x_axis}</b>: %{{x}}<br>"
+                        f"<b>Spreadsheet</b>: %{{text}}<br>"
+                        "<extra></extra>"
+                        )
+                    ))
+                for y in selected_y_columns:
+                    fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
                     mode='markers',
@@ -429,15 +489,42 @@ def plot():
                         f"<b>{x_axis}</b>: %{{x}}<br>"
                         f"<b>Spreadsheet</b>: %{{text}}<br>"
                         "<extra></extra>"
-                    )
-                ))
-                logger.debug(f"Added plot trace for '{table_name} - {y}'.")
+                        )
+                    ))   
+            y_axis = [y_preset] + selected_y_columns # Combining calculated column name and selected columns names
+            logger.debug(f"Added plot trace for '{table_name} - {y}'.")        
+        else:    
+            for y in y_axis:
+                for table_name in data['source'].unique():
+                    table_data = data[data['source'] == table_name]
+                    fig.add_trace(go.Scatter(
+                        x=table_data[x_axis],
+                        y=table_data[y],
+                        mode='markers',
+                        name=f"{table_name} - {y}",
+                        marker=dict(color=color_map[table_name]),
+                        text=table_data['source'],
+                        hovertemplate=(
+                            f"<b>{y}</b>: %{{y}}<br>"
+                            f"<b>{x_axis}</b>: %{{x}}<br>"
+                            f"<b>Spreadsheet</b>: %{{text}}<br>"
+                            "<extra></extra>"
+                        )
+                    ))
+        
+        y_axis = ["p'" if y == 'p' else y for y in y_axis] #Add apostrophe to p
+        if x_axis == 'p':
+            x_axis = "p'"
+
+        x_axis_name = x_axis.replace('_', ' ').capitalize()
+        y_axis_name = ', '.join([col.replace('_', ' ').capitalize() for col in y_axis])
+        title_name = f"{y_axis_name} vs {x_axis_name}"
 
         # Customize the layout with legend
         fig.update_layout(
-            title='Interactive Plot',
-            xaxis_title=x_axis.replace('_', ' ').capitalize(),
-            yaxis_title=', '.join([col.replace('_', ' ').capitalize() for col in y_axis]),
+            title=title_name,
+            xaxis_title= x_axis_name,
+            yaxis_title= y_axis_name,
             legend_title="Source Tables",
             hovermode='closest',
             xaxis=dict(

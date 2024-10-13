@@ -202,6 +202,7 @@ document
       return;
     }
 
+
     if (y_axis_values.length === 0) {
       await showMessage(
         "Please select at least one Y-Axis value.",
@@ -256,6 +257,104 @@ document
       );
     }
   });
+  
+document
+  .getElementById("plot-form")
+  .addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const formData = new FormData(event.target);
+    const x_axis_value = document.querySelector('select[name="x_axis"]').value;
+    const preset_value = document.querySelector('select[name="preset-options"]').value;
+
+    // Ensure x_axis value is not empty before appending
+    if (x_axis_value) {
+      formData.append("x_axis", x_axis_value);
+    } 
+    if (preset_value) {
+      formData.append("preset-options", preset_value)
+    }
+    else {
+      await showMessage(
+        "Please select an X-Axis value.",
+        false,
+        "plot-message-area",
+      );
+      return;
+    }
+
+    // Get filtered spreadsheet IDs from hidden input
+    const filteredSpreadsheetIds = document.getElementById(
+      "filtered-spreadsheet-ids",
+    ).value;
+    formData.append("filtered_spreadsheet_ids", filteredSpreadsheetIds);
+
+    // Get decryption password
+    const decryptPassword = document.getElementById("decrypt_password").value;
+    formData.append("decrypt_password", decryptPassword);
+
+    try {
+      const response = await fetch("/plot", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.graph_json) {
+        const plotData = JSON.parse(data.graph_json);
+        Plotly.react("plot-container", plotData.data, plotData.layout);
+        await showMessage(
+          "Plot generated successfully.",
+          true,
+          "plot-message-area",
+        );
+      } else if (data.error) {
+        await showMessage(data.error, false, "plot-message-area");
+      } else {
+        await showMessage(
+          "An unknown error occurred.",
+          false,
+          "plot-message-area",
+        );
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      await showMessage("Error generating plot.", false, "plot-message-area");
+    }
+  });  
+
+// Function to update plot options based on loaded columns
+async function updatePlotOptions(xOptions, yOptions) {
+  const xAxisSelect = document.querySelector('select[name="x_axis"]');
+  const yAxisContainer = document.getElementById("y-axis-container");
+
+  // Clear current options
+  xAxisSelect.innerHTML = "";
+  yAxisContainer.innerHTML = "";
+
+  // Populate new options for X-Axis
+  xOptions.forEach((column) => {
+    const option = document.createElement("option");
+    option.value = column;
+    option.textContent = column;
+    xAxisSelect.appendChild(option);
+  });
+
+  // Populate new checkboxes for Y-Axis
+  yOptions.forEach((column) => {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "y_axis";
+    checkbox.value = column;
+
+    const label = document.createElement("label");
+    label.textContent = column;
+
+    yAxisContainer.appendChild(checkbox);
+    yAxisContainer.appendChild(label);
+    yAxisContainer.appendChild(document.createElement("br"));
+  });
+}
 
 // Function to toggle visibility of instance value checklists
 function toggleValueChecklist(checkbox) {
