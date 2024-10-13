@@ -32,25 +32,45 @@
     </form>
 
     <form id="filter-form">
+<!-- Spreadsheets selection -->
+<div id="spreadsheet-selection">
+  <h2>Select Table(s)</h2> <!-- Changed to a title -->
 
-    <!-- Spreadsheets selection -->
-    <div id="spreadsheet-selection">
-      <label>Select table(s):</label>
-      <div id="table-checkboxes">
-        {% for table in tables %}
+  
+  <!-- Non-encrypted tables -->
+  <div id="non-encrypted-tables">
+    <h3>Non-encrypted Tables:</h3>
+    <div id="table-checkboxes">
+      {% for table in tables %}
+        {% if not table.encrypted %}
         <div>
           <!-- Checkbox for table selection -->
-          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> {{ table.spreadsheet_name }}<br>
-          
-          <!-- Conditional password input for encrypted tables -->
-          {% if table.encrypted %}
-          <label for="password_{{ table.spreadsheet_name }}">Password for {{ table.spreadsheet_name }}:</label>
-          <input type="password" id="password_{{ table.spreadsheet_name }}" name="password_{{ table.spreadsheet_name }}" placeholder="Password"><br>
-          {% endif %}
+          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> 
+          {{ table.spreadsheet_name }}<br>
         </div>
-        {% endfor %}
-      </div>
+        {% endif %}
+      {% endfor %}
     </div>
+  </div>
+
+  <!-- Encrypted tables -->
+  <div id="encrypted-tables">
+    <h3>Encrypted Tables:</h3>
+    <div id="table-checkboxes">
+      {% for table in tables %}
+        {% if table.encrypted %}
+        <div>
+          <!-- Checkbox for table selection -->
+          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> 
+          {{ table.spreadsheet_name }}<br>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+
 
       <!-- Instances selection -->
       <div id="instance-selection">
@@ -117,8 +137,13 @@
 
     <!-- Container to display the plot -->
     <h2>Generated Plot:</h2>
-    <div id="plot-container">
-    </div>
+    <div id="plot-message-area"></div>
+
+    <div id="file-passing"></div>
+
+    <div id="plot-container"></div>
+
+
 
     <!-- Link to external JavaScript file -->
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>
