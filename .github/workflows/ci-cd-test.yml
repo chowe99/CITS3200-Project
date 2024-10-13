@@ -1,0 +1,102 @@
+# .github/workflows/ci-cd-test.yml
+
+name: CI/CD and Automated Testing
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest  # Use GitHub's Ubuntu runner
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Python 3.10
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Step 3: Cache pip dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # Step 4: Install Dependencies
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir -r requirements.txt
+          pip install pytest selenium
+
+      # Step 5: Install Google Chrome
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      # Step 6: Install ChromeDriver
+      - name: Install ChromeDriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          CHROME_MAJOR_VERSION=${CHROME_VERSION%%.*}
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION")
+          wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/local/bin/chromedriver
+          sudo chmod +x /usr/local/bin/chromedriver
+          rm chromedriver_linux64.zip
+
+      # Step 7: Set NAS_MOUNT_PATH to Simulated Directory
+      - name: Set NAS_MOUNT_PATH to Simulated Directory
+        run: |
+          mkdir -p tests/integration
+          echo "Simulating NAS by using tests/integration directory."
+          # Ensure the simulated directory exists and contains necessary files
+          cp tests/e2e/test_spreadsheet.xlsx tests/integration/soil_test_results.db || true  # Copy a sample DB if needed
+
+      # Step 8: Start Docker Compose Services
+      - name: Start Docker Compose Services
+        run: |
+          docker-compose up -d
+
+      # Step 9: Wait for Flask App to be Healthy
+      - name: Wait for Flask App to be Healthy
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:5123/ > /dev/null; then
+              echo "Flask app is up and running!"
+              break
+            fi
+            echo "Waiting for Flask app to start..."
+            sleep 2
+          done
+
+      # Step 10: Run End-to-End Tests
+      - name: Run End-to-End Tests
+        env:
+          TEST_ENCRYPT_PASSWORD: ${{ secrets.TEST_ENCRYPT_PASSWORD }}  # Securely inject secret
+        run: |
+          # Dynamically replace the spreadsheet path in the test script
+          sed -i "s|./tests/e2e/test_spreadsheet_sample.xlsx|./tests/e2e/test_spreadsheet.xlsx|" tests/e2e/test_user_flow.py
+          
+          # Run pytest
+          pytest tests/e2e/test_user_flow.py
+
+      # Step 11: Shutdown Docker Compose Services
+      - name: Shutdown Docker Compose Services
+        run: |
+          docker-compose down
+
