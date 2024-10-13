@@ -12,6 +12,9 @@ on:
       - main
       - release
 
+env:
+  NAS_MOUNT_PATH: "smb://drive.irds.uwa.edu.au/RES-ENG-CITS3200-P000735"
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest  # Use GitHub's Ubuntu runner
