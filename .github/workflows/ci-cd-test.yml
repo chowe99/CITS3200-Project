@@ -13,7 +13,10 @@ on:
       - release
 
 env:
-  REAL_NAS: "false"
+  REAL_NAS: "false"  # Indicates whether to use a real NAS
+  NAS_MOUNT_PATH: "./tests/integration"  # Default to simulated directory
+  SMB_USERNAME: ""  # Set to empty as REAL_NAS is false
+  SMB_PASSWORD: ""  # Set to empty as REAL_NAS is false
 
 jobs:
   build-and-test:
