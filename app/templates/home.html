@@ -91,6 +91,7 @@
           <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
           {% endfor %}
         </select>
+        <p>X-axis is only added if preset plot options is set at 'None'</p>
       </div>
 
       <div>
@@ -105,6 +106,7 @@
           {% endif %}
           {% endfor %}
         </div>
+        <p>Y-axes can be added to preset plots options.</p>
       </div>
       <input type="hidden" id="filtered-spreadsheet-ids" name="filtered_spreadsheet_ids" value="">
       <div id="plot-message-area"></div>

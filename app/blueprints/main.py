@@ -196,36 +196,31 @@ def plot():
         colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow']  # Extended colors
         color_map = {}
 
-        # Default title name which changes when a preset-option is chosen
-        title_name = 'Interactive Plot'
+        selected_y_columns = y_axis # This variable is for containing manually selected y_axis which will be 
+                                    #used if calculated preset options are selected 
 
         # Non-calculated preset options
+        # Columns in preset options get added to y_axis
         if preset == "non_calc_1":
-            y_axis = ['p', 'q', 'induced_PWP']
+            y_axis = ['p', 'q', 'induced_PWP'] + y_axis
             x_axis = 'axial_strain'
-            title_name = """p', q, induced PWP vs axial strain"""
         if preset == "non_calc_2":
-            y_axis = ['p']
-            x_axis = 'q'
-            title_name = """q vs p'"""
+            y_axis = ['q'] + y_axis
+            x_axis = 'p'
         if preset == "non_calc_3":
-            y_axis = ['axial_strain']
-            x_axis = 'vol_strain'
-            title_name = "Vol strain vs axial strain"
+            y_axis = ['vol_strain'] + y_axis
+            x_axis = 'axial_strain'
         
         # Calculated preset options
         if preset == "calc_1":
-            y_axis = ['e']
+            y_axis = ['e'] + y_axis
             x_axis = 'p'
-            title_name = "e vs log(p')"
         if preset == "calc_2":
-            y_axis = ['q','p']
+            y_axis = ['q','p'] + y_axis
             x_axis = 'axial_strain'
-            title_name = "q/p' vs axial strain"
         if preset == "calc_3":
-            y_axis = ['q', 'p']
+            y_axis = ['q', 'p'] + y_axis
             x_axis = 'p'
-            title_name = "qmax/p' vs p'"
         
         for idx, spreadsheet_id in enumerate(spreadsheet_ids):
             spreadsheet = Spreadsheet.query.get(spreadsheet_id)
@@ -292,17 +287,32 @@ def plot():
             for table_name in data['source'].unique():
                 table_data = data[data['source'] == table_name]
                 if preset == "calc_1": 
-                    y = 'e'
+                    y_preset = 'e' #Swap x-axis and y-axis (just for this option)
                     x_axis = "log(p')"
                     table_data[x_axis] = np.log(table_data['p'])
                 if preset == "calc_2":
-                    y = "q/p'"
-                    table_data[y] = table_data['q']/table_data['p']
+                    y_preset = "q/p'"
+                    table_data[y_preset] = table_data['q']/table_data['p']
                 if preset == "calc_3":
                     qmax = table_data['q'].max()
-                    y = "qmax/p'"
-                    table_data[y] = qmax/ table_data['p']   
+                    y_preset = "qmax/p'"
+                    table_data[y_preset] = qmax/ table_data['p']   
                 fig.add_trace(go.Scatter(
+                    x=table_data[x_axis],
+                    y=table_data[y_preset],
+                    mode='markers',
+                    name=f"{table_name} - {y_preset}",
+                    marker=dict(color=color_map[table_name]),
+                    text=table_data['source'],
+                    hovertemplate=(
+                        f"<b>{y_preset}</b>: %{{y}}<br>"
+                        f"<b>{x_axis}</b>: %{{x}}<br>"
+                        f"<b>Spreadsheet</b>: %{{text}}<br>"
+                        "<extra></extra>"
+                        )
+                    ))
+                for y in selected_y_columns:
+                    fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
                     mode='markers',
@@ -315,10 +325,10 @@ def plot():
                         f"<b>Spreadsheet</b>: %{{text}}<br>"
                         "<extra></extra>"
                         )
-                    ))
-            y_axis = [y] #y_axis is only used for naming axis for preset options with calculations
-            
-        else:
+                    ))   
+            y_axis = [y_preset] + selected_y_columns # Combining calculated column name and selected columns names
+        
+        else:    
             for y in y_axis:
                 for table_name in data['source'].unique():
                     table_data = data[data['source'] == table_name]
@@ -337,11 +347,19 @@ def plot():
                         )
                     ))
         
+        y_axis = ["p'" if y == 'p' else y for y in y_axis] #Add apostrophe to p
+        if x_axis == 'p':
+            x_axis = "p'"
+
+        x_axis_name = x_axis.replace('_', ' ').capitalize()
+        y_axis_name = ', '.join([col.replace('_', ' ').capitalize() for col in y_axis])
+        title_name = f"{y_axis_name} vs {x_axis_name}"
+        
         # Customize the layout with legend
         fig.update_layout(
             title=title_name,
-            xaxis_title=x_axis.replace('_', ' ').capitalize(),
-            yaxis_title=', '.join([col.replace('_', ' ').capitalize() for col in y_axis]),
+            xaxis_title= x_axis_name,
+            yaxis_title= y_axis_name,
             legend_title="Source Tables",
             hovermode='closest',
             xaxis=dict(
