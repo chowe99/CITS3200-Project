@@ -9,16 +9,20 @@ services:
       - ".:/app"
       - "${NAS_MOUNT_PATH}:/mnt/irds"
     environment:
-      - FLASK_APP=app.py
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
-      - DATABASE_PATH=/mnt/irds/soil_test_results.db
-      - SMB_USERNAME=${SMB_USERNAME}
-      - SMB_PASSWORD=${SMB_PASSWORD}
-      - REAL_NAS=${REAL_NAS}
+      FLASK_APP: app.py
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      DATABASE_PATH: /mnt/irds/soil_test_results.db
+      SMB_USERNAME: "${SMB_USERNAME}"
+      SMB_PASSWORD: "${SMB_PASSWORD}"
+      REAL_NAS: "${REAL_NAS}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:5123"]
       interval: 2s
       timeout: 60s
       retries: 5
+
+volumes:
+  smb:
+
 
