@@ -281,7 +281,7 @@ def plot():
         selected_tables = request.form.getlist('table_name[]')
         instances_json = request.form.get('instances_json')
         decrypt_password = request.form.get("decrypt_password")
-    
+        
         logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
         # Input validation
@@ -329,17 +329,18 @@ def plot():
             logger.error("No spreadsheets match the selected filters.")
             return jsonify({"error": "No spreadsheets match the selected filters."}), 400
 
-        # Fetch data using SQLAlchemy
         data_frames = []
         colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan', 'magenta', 'yellow']  # Extended colors
         color_map = {}
+        plot_messages = []  # List to track messages (both success and failure)
 
         for idx, spreadsheet_id in enumerate(spreadsheet_ids):
             spreadsheet = Spreadsheet.query.get(spreadsheet_id)
             if not spreadsheet:
                 logger.debug(f"Spreadsheet ID {spreadsheet_id} not found.")
+                plot_messages.append(f"Spreadsheet ID {spreadsheet_id} not found.")
                 continue
-            
+
             table_name = spreadsheet.spreadsheet_name
             color_map[table_name] = colors[idx % len(colors)]
             logger.debug(f"Processing Spreadsheet '{table_name}' with color '{color_map[table_name]}'.")
@@ -348,15 +349,17 @@ def plot():
                 if spreadsheet.encrypted:
                     logger.debug(f"Spreadsheet '{table_name}' is encrypted. Attempting decryption.")
                     
-                    # Retrieve the corresponding password for this encrypted spreadsheet
                     if not decrypt_password:
-                        logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'. Skipping.")
-                        continue  # Skip this spreadsheet
+                        logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'.")
+                        plot_messages.append(f"Password required for spreadsheet '{table_name}'.")
+                        continue
 
                     if not verify_password(spreadsheet.password_salt, spreadsheet.password_hash, decrypt_password):
-                        logger.error(f"Incorrect decryption password for Spreadsheet '{table_name}'. Skipping.")
-                        continue  # Skip this spreadsheet
+                        logger.error(f"Incorrect decryption password for Spreadsheet '{table_name}'.")
+                        plot_messages.append(f"Incorrect password for spreadsheet '{table_name}'.")
+                        continue
                     
+                    # Decrypt data
                     key = derive_key(decrypt_password, spreadsheet.key_salt)
                     iv = spreadsheet.iv
                     rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
@@ -378,12 +381,14 @@ def plot():
                     df = pd.DataFrame(data)
                     df = df.dropna(subset=[x_axis])
                     data_frames.append(df)
+                    plot_messages.append(f"Spreadsheet '{table_name}' plotted successfully.")
                     logger.debug(f"Decrypted and cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
 
                 else:
                     rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
                     if not rows:
                         logger.debug(f"No rows found for Spreadsheet '{table_name}'.")
+                        plot_messages.append(f"No rows found for spreadsheet '{table_name}'.")
                         continue
                     data_dicts = []
                     for row in rows:
@@ -400,19 +405,22 @@ def plot():
                     df = df.dropna(subset=[x_axis])
                     logger.debug(f"Cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
                     data_frames.append(df)
+                    plot_messages.append(f"Spreadsheet '{table_name}' plotted successfully.")
 
             except Exception as e:
                 logger.error(f"Error processing Spreadsheet '{table_name}': {e}. Skipping.")
-                continue  # Skip the spreadsheet if any error occurs
+                plot_messages.append(f"Error processing spreadsheet '{table_name}'.")
+                continue
 
         if not data_frames:
             logger.error("No data found for the selected spreadsheets.")
             return jsonify({"error": "No data found for the selected spreadsheets."}), 404
 
+        # Combine data
         data = pd.concat(data_frames, ignore_index=True)
         logger.info(f"Combined data contains {len(data)} rows.")
 
-        # Create a Plotly figure
+        # Create the Plotly figure
         fig = go.Figure()
 
         for y in y_axis:
@@ -434,7 +442,7 @@ def plot():
                 ))
                 logger.debug(f"Added plot trace for '{table_name} - {y}'.")
 
-        # Customize the layout with legend
+        # Customize the layout
         fig.update_layout(
             title='Interactive Plot',
             xaxis_title=x_axis.replace('_', ' ').capitalize(),
@@ -462,10 +470,15 @@ def plot():
         )
         logger.info("Plotly figure created successfully.")
 
+        # Serialize figure and messages
         graph_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
         logger.debug("Serialized Plotly figure to JSON.")
 
-        return jsonify({"graph_json": graph_json})
+        return jsonify({
+            "graph_json": graph_json,
+            "plot_messages": plot_messages  # Send both success and failure messages as text
+        })
+
 
     except Exception as e:
         logger.exception(f"Error during plotting: {e}")

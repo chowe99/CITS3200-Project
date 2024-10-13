@@ -233,11 +233,14 @@ document
       if (data.graph_json) {
         const plotData = JSON.parse(data.graph_json);
         Plotly.react("plot-container", plotData.data, plotData.layout);
-        await showMessage(
-          "Plot generated successfully.",
-          true,
-          "plot-message-area",
-        );
+
+        data.plot_messages.forEach(message => {
+          await showMessage(
+            message,
+            true,
+            "plot-message-area",
+          );
+        });
       } else if (data.error) {
         await showMessage(data.error, false, "plot-message-area");
       } else {
