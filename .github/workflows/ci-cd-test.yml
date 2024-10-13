@@ -77,12 +77,12 @@ jobs:
       # Step 9: Start Docker Compose Services
       - name: Start Docker Compose Services
         run: |
-          docker-compose up -d
+          docker compose up -d
 
       # Step 10: Wait for Flask App to be Healthy
       - name: Wait for Flask App to be Healthy
         run: |
-          for i in {1..30}; do
+          for i in {1..20}; do
             if curl -s http://localhost:5123/ > /dev/null; then
               echo "Flask app is up and running!"
               break
