@@ -13,14 +13,11 @@ on:
       - release
 
 env:
-  REAL_NAS: "false"  # Moved to the top-level environment
+  REAL_NAS: "false"
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest  # Use GitHub's Ubuntu runner
-
-    env:
-      NAS_MOUNT_PATH: "./tests/integration"  # Default to simulated directory
 
     steps:
       # Step 1: Checkout the repository
@@ -48,7 +45,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev
 
-      # Step 5: Install Python Dependencies
+      # Step 5: Install Dependencies
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
@@ -60,32 +57,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
-      # Step 7A: Setup ChromeDriver using the Official Action
-      - name: Setup ChromeDriver
-        uses: actions/setup-chromedriver@v3
+      # Step 7: Setup ChromeDriver using a Dedicated Action
+      - name: Install ChromeDriver
+        uses: actions/checkout@v2 
+      - uses: nanasess/setup-chromedriver@v2
         with:
-          chromedriver-version: 'latest'  # Automatically matches Chrome version
-
-      # Step 7B: Setup Display and Xvfb
-      - name: Setup Display and Xvfb
-        run: |
+          # Optional: do not specify to match Chrome's version
+          chromedriver-version: '88.0.4324.96'
+      - run: |
           export DISPLAY=:99
           chromedriver --url-base=/wd/hub &
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-          sleep 5  # Ensure services are up
-
-      # Step 8: Set NAS_MOUNT_PATH to Simulated Directory if REAL_NAS is false
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
+      
+      # Step 8: Set NAS_MOUNT_PATH to Simulated Directory
       - name: Configure NAS_MOUNT_PATH
         run: |
           if [ "$REAL_NAS" = "false" ]; then
-            export NAS_MOUNT_PATH="./tests/integration"
             echo "NAS_MOUNT_PATH=./tests/integration" >> $GITHUB_ENV
             mkdir -p tests/integration
             echo "Simulating NAS by using tests/integration directory."
             # Ensure the simulated directory exists and contains necessary files
             cp tests/e2e/test_spreadsheet.xlsx tests/integration/soil_test_results.db || true  # Copy a sample DB if needed
           fi
-
+          
       # Step 9: Start Docker Compose Services
       - name: Start Docker Compose Services
         run: |
@@ -117,4 +111,4 @@ jobs:
       # Step 12: Shutdown Docker Compose Services
       - name: Shutdown Docker Compose Services
         run: |
-          docker compose down
+          docker-compose down
