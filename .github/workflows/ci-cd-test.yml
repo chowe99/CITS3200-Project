@@ -12,6 +12,11 @@ on:
       - main
       - release
 
+env:
+  REAL_NAS: "false"  # Indicates whether to use a real NAS
+  NAS_MOUNT_PATH: "./tests/integration"  # Default to simulated directory
+  SMB_USERNAME: ""  # Set to empty as REAL_NAS is false
+  SMB_PASSWORD: ""  # Set to empty as REAL_NAS is false
 
 jobs:
   build-and-test:
@@ -37,48 +42,60 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # Step 4: Install Dependencies
+      # Step 4: Install SQLCipher Dependencies
+      - name: Install SQLCipher Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlcipher-dev
+
+      # Step 5: Install Dependencies
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir -r requirements.txt
-          pip install pytest selenium
+      # Step 5.1: Verify Pytest Installation
+      - name: Verify Pytest Installation
+        run: |
+          pytest --version
 
-      # Step 5: Install Google Chrome
+      # Step 6: Install Google Chrome
       - name: Install Google Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
-      # Step 6: Install ChromeDriver
+      # Step 7: Setup ChromeDriver using a Dedicated Action
       - name: Install ChromeDriver
+        uses: actions/checkout@v2 
+      - uses: nanasess/setup-chromedriver@v2
+        with:
+          # Optional: do not specify to match Chrome's version
+          chromedriver-version: '88.0.4324.96'
+      - run: |
+          export DISPLAY=:99
+          chromedriver --url-base=/wd/hub &
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
+      
+      # Step 8: Set NAS_MOUNT_PATH to Simulated Directory
+      - name: Configure NAS_MOUNT_PATH
         run: |
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
-          CHROME_MAJOR_VERSION=${CHROME_VERSION%%.*}
-          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION")
-          wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/local/bin/chromedriver
-          sudo chmod +x /usr/local/bin/chromedriver
-          rm chromedriver_linux64.zip
-
-      # Step 7: Set NAS_MOUNT_PATH to Simulated Directory
-      - name: Set NAS_MOUNT_PATH to Simulated Directory
-        run: |
-          mkdir -p tests/integration
-          echo "Simulating NAS by using tests/integration directory."
-          # Ensure the simulated directory exists and contains necessary files
-          cp tests/e2e/test_spreadsheet.xlsx tests/integration/soil_test_results.db || true  # Copy a sample DB if needed
-
-      # Step 8: Start Docker Compose Services
+          if [ "$REAL_NAS" = "false" ]; then
+            echo "NAS_MOUNT_PATH=./tests/integration" >> $GITHUB_ENV
+            mkdir -p tests/integration
+            echo "Simulating NAS by using tests/integration directory."
+            # Ensure the simulated directory exists and contains necessary files
+            cp tests/e2e/test_spreadsheet.xlsx tests/integration/soil_test_results.db || true  # Copy a sample DB if needed
+          fi
+          
+      # Step 9: Start Docker Compose Services
       - name: Start Docker Compose Services
         run: |
-          docker-compose up -d
+          docker compose up -d
 
-      # Step 9: Wait for Flask App to be Healthy
+      # Step 10: Wait for Flask App to be Healthy
       - name: Wait for Flask App to be Healthy
         run: |
-          for i in {1..30}; do
+          for i in {1..20}; do
             if curl -s http://localhost:5123/ > /dev/null; then
               echo "Flask app is up and running!"
               break
@@ -87,7 +104,7 @@ jobs:
             sleep 2
           done
 
-      # Step 10: Run End-to-End Tests
+      # Step 11: Run End-to-End Tests
       - name: Run End-to-End Tests
         env:
           TEST_ENCRYPT_PASSWORD: ${{ secrets.TEST_ENCRYPT_PASSWORD }}  # Securely inject secret
@@ -98,8 +115,7 @@ jobs:
           # Run pytest
           pytest tests/e2e/test_user_flow.py
 
-      # Step 11: Shutdown Docker Compose Services
+      # Step 12: Shutdown Docker Compose Services
       - name: Shutdown Docker Compose Services
         run: |
           docker-compose down
-
