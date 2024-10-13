@@ -54,49 +54,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
-      # Step 7: Install ChromeDriver (Updated with Correct Binary)
-      - name: Install ChromeDriver
-        run: |
-          set -x  # Enable debug mode to print each command
-          CHROME_VERSION=$(google-chrome-stable --version | grep -oE '\d+\.\d+\.\d+')
-          echo "Detected Chrome version: $CHROME_VERSION"
-          
-          if [ -z "$CHROME_VERSION" ]; then
-            echo "Error: Failed to detect Chrome version."
-            exit 1
-          fi
-          
-          CHROME_MAJOR_VERSION=${CHROME_VERSION%%.*}
-          echo "Chrome major version: $CHROME_MAJOR_VERSION"
-          
-          if [ -z "$CHROME_MAJOR_VERSION" ]; then
-            echo "Error: Failed to extract Chrome major version."
-            exit 1
-          fi
-          
-          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION")
-          echo "Latest ChromeDriver version for Chrome $CHROME_MAJOR_VERSION: $CHROMEDRIVER_VERSION"
-          
-          if [ -z "$CHROMEDRIVER_VERSION" ]; then
-            echo "Error: Failed to fetch ChromeDriver version for Chrome $CHROME_MAJOR_VERSION."
-            exit 1
-          fi
-          
-          wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-          
-          if [ ! -f "chromedriver_linux64.zip" ]; then
-            echo "Error: Failed to download ChromeDriver."
-            exit 1
-          fi
-          
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/local/bin/chromedriver
-          sudo chmod +x /usr/local/bin/chromedriver
-          rm chromedriver_linux64.zip
-          
-          # Verify ChromeDriver Installation
-          chromedriver --version
-
+      # Step 7: Setup ChromeDriver using a Dedicated Action
+      - name: Setup ChromeDriver
+        uses: actions/setup-chromedriver@v3
+        with:
+          chromedriver-version: latest  # You can specify a specific version or use 'latest'
+      
       # Step 8: Set NAS_MOUNT_PATH to Simulated Directory
       - name: Set NAS_MOUNT_PATH to Simulated Directory
         run: |
