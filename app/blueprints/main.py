@@ -215,8 +215,8 @@ def plot():
         
         # Calculated preset options
         if preset == "calc_1":
-            y_axis = ['p']
-            x_axis = 'e'
+            y_axis = ['e']
+            x_axis = 'p'
             title_name = "e vs log(p')"
         if preset == "calc_2":
             y_axis = ['q','p']
@@ -291,16 +291,17 @@ def plot():
         if preset == "calc_1" or preset =="calc_2" or preset == "calc_3":
             for table_name in data['source'].unique():
                 table_data = data[data['source'] == table_name]
-                if preset == "calc_1":
-                    y = "log(p')"
-                    table_data[y] == np.log(table_data['p'])
+                if preset == "calc_1": 
+                    y = 'e'
+                    x_axis = "log(p')"
+                    table_data[x_axis] = np.log(table_data['p'])
                 if preset == "calc_2":
                     y = "q/p'"
-                    table_data[y] == table_data['q']/table_data['p']
+                    table_data[y] = table_data['q']/table_data['p']
                 if preset == "calc_3":
                     qmax = table_data['q'].max()
                     y = "qmax/p'"
-                    table_data[y] == qmax/ table_data['p']   
+                    table_data[y] = qmax/ table_data['p']   
                 fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
@@ -315,6 +316,8 @@ def plot():
                         "<extra></extra>"
                         )
                     ))
+            y_axis = [y] #y_axis is only used for naming axis for preset options with calculations
+            
         else:
             for y in y_axis:
                 for table_name in data['source'].unique():
@@ -333,7 +336,7 @@ def plot():
                             "<extra></extra>"
                         )
                     ))
-            
+        
         # Customize the layout with legend
         fig.update_layout(
             title=title_name,
