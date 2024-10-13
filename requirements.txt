@@ -1,10 +1,7 @@
 Flask                # Web framework to handle routing and rendering templates
-Flask-SQLAlchemy
 SQLAlchemy           # SQL toolkit and Object-Relational Mapping (ORM) library
 openpyxl             # For reading Excel files if needed
 pandas               # For handling data querying and manipulation
+matplotlib           # For generating plots and visualizations
 #sqlite3              # Built-in, no need to add separately; included with Python standard library
-plotly
-pysqlcipher3
-cryptography
-numpy
+

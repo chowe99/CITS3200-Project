@@ -1,130 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Query and Plot</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  </head>
-  <body>
-    <div id="message-area"></div>
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}
-    <ul class="flashes">
-      {% for message in messages %}
-      <li>{{ message }}</li>
-      {% endfor %}
-    </ul>
-    {% endif %}
-    {% endwith %}
+</head>
+<body>
     <h1>Soil Database Tool</h1>
 
-    <h2>Upload Excel File</h2>
-    <form id="upload-form" method="post" enctype="multipart/form-data" action="/upload">
-      <label for="excel-file">Select Excel Files:</label>
-      <input type="file" id="excel-file" name="excel_files" accept=".xlsx" multiple required><br><br>
-
-      <label for="password">Encryption Password (optional):</label>
-      <input type="password" id="encrypt_password" name="encrypt_password" placeholder="Enter password to encrypt data"><br><br>
-
-      <button type="submit">Upload and Process</button>
+    <!-- Table selection dropdown -->
+    <form id="table-form">
+        <label for="table-select">Select Table:</label>
+        <select id="table-select" name="table_name">
+            {% for table in tables %}
+                <option value="{{ table }}">{{ table }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Load Table</button>
     </form>
 
-    <form id="filter-form">
-
-    <!-- Spreadsheets selection -->
-    <div id="spreadsheet-selection">
-      <label>Select table(s):</label>
-      <div id="table-checkboxes">
-        {% for table in tables %}
+    <!-- Plot form, hidden until a table is selected -->
+    <form id="plot-form" style="display: none;">
         <div>
-          <!-- Checkbox for table selection -->
-          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> {{ table.spreadsheet_name }}<br>
-          
-          <!-- Conditional password input for encrypted tables -->
-          {% if table.encrypted %}
-          <label for="password_{{ table.spreadsheet_name }}">Password for {{ table.spreadsheet_name }}:</label>
-          <input type="password" id="password_{{ table.spreadsheet_name }}" name="password_{{ table.spreadsheet_name }}" placeholder="Password"><br>
-          {% endif %}
+            <h3>Select X-Axis:</h3>
+            <select name="x_axis">
+                {% for column in x_axis_options %}
+                    <option value="{{ column }}">{{ column }}</option>
+                {% endfor %}
+            </select>
         </div>
-        {% endfor %}
-      </div>
-    </div>
 
-      <!-- Instances selection -->
-      <div id="instance-selection">
-        <label for="instance-select">Select instance(s):</label>
-        {% for key, values in instances.items() %}
         <div>
-          <input type="checkbox" id="{{ key }}" name="instance_names" value="{{ key }}" onclick="toggleValueChecklist(this)">
-          <label for="{{ key }}">{{ key }}</label>
-          <div class="value-checklist" style="display: none;">
-            {% for value in values %}
-            <input type="checkbox" id="{{ key }}_{{ value }}" name="{{ key }}_values" value="{{ value }}">
-            <label for="{{ key }}_{{ value }}">{{ value }}</label><br>
-            {% endfor %}
-          </div>
+            <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
+            <!-- Add ID to this div -->
+            <div id="y-axis-container">
+                {% for column in y_axis_options %}
+                    <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column }}<br>
+                {% endfor %}
+            </div>
         </div>
-        {% endfor %}
-      </div>
 
-      <!-- X-Axis selection -->
-      <div>
-        <h3>Preset plot options:</h3>
-        <select name="preset-options">
-          <option value="None">None</option>
-          <option value="non_calc_1">p', q, induced PWP vs axial strain </option>
-          <option value="non_calc_2">q vs p'</option>
-          <option value="non_calc_3">Vol strain vs axial strain</option>
-          <option value="calc_1">e vs log(p')</option>
-          <option value="calc_2">q/p' vs axial strain</option>
-          <option value="calc_3">qmax/p' vs p'</option>
-        </select>
-      </div>
-      
-      <div>
-        <h3>Select X-Axis:</h3>
-        <select name="x_axis">
-          {% for column in x_axis_options %}
-          <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
-          {% endfor %}
-        </select>
-        <p>X-axis is only added if preset plot options is set at 'None'</p>
-      </div>
-
-      <!-- Y-Axis selection -->
-      <div>
-        <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
-        <div id="y-axis-container">
-          {% for column in y_axis_options %}
-          {% if column == 'p' %}
-          <input type="checkbox" name="y_axis" value="{{ column }}"> p'<br>
-          {% else %}
-          <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
-          {% endif %}
-          {% endfor %}
-        </div>
-        <p>Y-axes can be added to preset plots options.</p>
-      </div>
-
-      <!-- Decryption password -->
-      <label for="decrypt_password">Decryption Password:</label>
-      <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
-
-      <button type="submit">Generate Plot</button>
+        <button type="submit">Generate Plot</button>
     </form>
 
     <!-- Container to display the plot -->
-    <h2>Generated Plot:</h2>
     <div id="plot-container">
+        <h2>Generated Plot:</h2>
+        <img id="plot-image" src="" alt="Generated Plot" style="display: none;">
+    </div>
+
+    <!-- Button to open the add column modal -->
+    <button id="add-column-btn">Add New Column</button>
+
+    <!-- Modal for adding a new column -->
+    <div id="add-column-modal" style="display: none;">
+        <h2>Add a New Column</h2>
+        <form id="add-column-form">
+            <label for="column-name">Column Name:</label>
+            <input type="text" id="column-name" name="column_name" required><br>
+
+            <label for="column-type">Column Data Type:</label>
+            <select id="column-type" name="column_type" required>
+                <option value="INTEGER">INTEGER</option>
+                <option value="REAL">REAL</option>
+                <option value="TEXT">TEXT</option>
+            </select><br>
+
+            <label for="column-data">Enter Data (comma-separated) or Upload CSV:</label>
+            <textarea id="column-data" name="column_data"></textarea><br>
+            <input type="file" id="column-file" name="column_file" accept=".csv"><br>
+
+            <button type="submit">Add Column</button>
+            <button type="button" id="close-modal">Cancel</button>
+        </form>
     </div>
 
     <!-- Link to external JavaScript file -->
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>
-    <!-- Include Plotly.js -->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
-  </body>
+</body>
 </html>
 
