@@ -280,14 +280,8 @@ def plot():
         y_axis = request.form.getlist('y_axis')
         selected_tables = request.form.getlist('table_name[]')
         instances_json = request.form.get('instances_json')
-        
-        # Collect decryption passwords from the form
-        decrypt_passwords = {}
-        for table_name in selected_tables:
-            password_field = f"password_{table_name}"
-            decrypt_passwords[table_name] = request.form.get(password_field)
-
-
+        decrypt_password = request.form.get("decrypt_password")
+    
         logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
         # Input validation
@@ -345,64 +339,71 @@ def plot():
             if not spreadsheet:
                 logger.debug(f"Spreadsheet ID {spreadsheet_id} not found.")
                 continue
+            
             table_name = spreadsheet.spreadsheet_name
             color_map[table_name] = colors[idx % len(colors)]
             logger.debug(f"Processing Spreadsheet '{table_name}' with color '{color_map[table_name]}'.")
 
-            if spreadsheet.encrypted:
-                logger.debug(f"Spreadsheet '{table_name}' is encrypted. Attempting decryption.")
-                
-                # Retrieve the corresponding password for this encrypted spreadsheet
-                decrypt_password = decrypt_passwords.get(table_name)
-                if not decrypt_password:
-                    logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'.")
-                    return jsonify({"error": f"Password required for spreadsheet '{table_name}'."}), 401
-                if not verify_password(spreadsheet.password_salt, spreadsheet.password_hash, decrypt_password):
-                    logger.error(f"Incorrect decryption password for Spreadsheet '{table_name}'.")
-                    return jsonify({"error": f"Incorrect password for spreadsheet '{table_name}'."}), 401
-                key = derive_key(decrypt_password, spreadsheet.key_salt)
-                iv = spreadsheet.iv
-                rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
-                data = []
-                for row in rows:
-                    decrypted_row = {}
-                    for col in [x_axis] + y_axis:
-                        encrypted_value = getattr(row, col)
-                        if encrypted_value:
-                            decrypted_value = decrypt_value(encrypted_value, key, iv)
-                            try:
-                                decrypted_row[col] = round(float(decrypted_value), 4)
-                            except ValueError:
-                                decrypted_row[col] = None
-                        else:
-                            decrypted_row[col] = None
-                    decrypted_row['source'] = table_name
-                    data.append(decrypted_row)
-                df = pd.DataFrame(data)
-                df = df.dropna(subset=[x_axis])
-                data_frames.append(df)
-                logger.debug(f"Decrypted and cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
+            try:
+                if spreadsheet.encrypted:
+                    logger.debug(f"Spreadsheet '{table_name}' is encrypted. Attempting decryption.")
+                    
+                    # Retrieve the corresponding password for this encrypted spreadsheet
+                    if not decrypt_password:
+                        logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'. Skipping.")
+                        continue  # Skip this spreadsheet
 
-            else:
-                rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
-                if not rows:
-                    logger.debug(f"No rows found for Spreadsheet '{table_name}'.")
-                    continue
-                data_dicts = []
-                for row in rows:
-                    row_dict = {col: getattr(row, col) for col in [x_axis] + y_axis}
-                    row_dict['source'] = table_name
-                    data_dicts.append(row_dict)
-                df = pd.DataFrame(data_dicts)
-                for col in [x_axis] + y_axis:
-                    if col in df.columns:
-                        df[col] = pd.to_numeric(df[col], errors='coerce').round(4)
-                    else:
-                        logger.warning(f"Column '{col}' not found in Spreadsheet '{table_name}'.")
-                        df[col] = None
-                df = df.dropna(subset=[x_axis])
-                logger.debug(f"Cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
-                data_frames.append(df)
+                    if not verify_password(spreadsheet.password_salt, spreadsheet.password_hash, decrypt_password):
+                        logger.error(f"Incorrect decryption password for Spreadsheet '{table_name}'. Skipping.")
+                        continue  # Skip this spreadsheet
+                    
+                    key = derive_key(decrypt_password, spreadsheet.key_salt)
+                    iv = spreadsheet.iv
+                    rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
+                    data = []
+                    for row in rows:
+                        decrypted_row = {}
+                        for col in [x_axis] + y_axis:
+                            encrypted_value = getattr(row, col)
+                            if encrypted_value:
+                                decrypted_value = decrypt_value(encrypted_value, key, iv)
+                                try:
+                                    decrypted_row[col] = round(float(decrypted_value), 4)
+                                except ValueError:
+                                    decrypted_row[col] = None
+                            else:
+                                decrypted_row[col] = None
+                        decrypted_row['source'] = table_name
+                        data.append(decrypted_row)
+                    df = pd.DataFrame(data)
+                    df = df.dropna(subset=[x_axis])
+                    data_frames.append(df)
+                    logger.debug(f"Decrypted and cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
+
+                else:
+                    rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
+                    if not rows:
+                        logger.debug(f"No rows found for Spreadsheet '{table_name}'.")
+                        continue
+                    data_dicts = []
+                    for row in rows:
+                        row_dict = {col: getattr(row, col) for col in [x_axis] + y_axis}
+                        row_dict['source'] = table_name
+                        data_dicts.append(row_dict)
+                    df = pd.DataFrame(data_dicts)
+                    for col in [x_axis] + y_axis:
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce').round(4)
+                        else:
+                            logger.warning(f"Column '{col}' not found in Spreadsheet '{table_name}'.")
+                            df[col] = None
+                    df = df.dropna(subset=[x_axis])
+                    logger.debug(f"Cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
+                    data_frames.append(df)
+
+            except Exception as e:
+                logger.error(f"Error processing Spreadsheet '{table_name}': {e}. Skipping.")
+                continue  # Skip the spreadsheet if any error occurs
 
         if not data_frames:
             logger.error("No data found for the selected spreadsheets.")
