@@ -92,12 +92,26 @@
 
       <!-- X-Axis selection -->
       <div>
+        <h3>Preset plot options:</h3>
+        <select name="preset-options">
+          <option value="None">None</option>
+          <option value="non_calc_1">p', q, induced PWP vs axial strain </option>
+          <option value="non_calc_2">q vs p'</option>
+          <option value="non_calc_3">Vol strain vs axial strain</option>
+          <option value="calc_1">e vs log(p')</option>
+          <option value="calc_2">q/p' vs axial strain</option>
+          <option value="calc_3">qmax/p' vs p'</option>
+        </select>
+      </div>
+      
+      <div>
         <h3>Select X-Axis:</h3>
         <select name="x_axis">
           {% for column in x_axis_options %}
           <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
           {% endfor %}
         </select>
+        <p>X-axis is only added if preset plot options is set at 'None'</p>
       </div>
 
       <!-- Y-Axis selection -->
@@ -112,6 +126,7 @@
           {% endif %}
           {% endfor %}
         </div>
+        <p>Y-axes can be added to preset plots options.</p>
       </div>
 
       <!-- Decryption password -->
