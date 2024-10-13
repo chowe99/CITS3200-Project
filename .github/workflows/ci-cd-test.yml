@@ -54,11 +54,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
-      # Step 7: Install ChromeDriver (Updated with Logging)
+      # Step 7: Install ChromeDriver (Updated with Correct Binary)
       - name: Install ChromeDriver
         run: |
           set -x  # Enable debug mode to print each command
-          CHROME_VERSION=$(google-chrome --version | grep -oE '\d+\.\d+\.\d+')
+          CHROME_VERSION=$(google-chrome-stable --version | grep -oE '\d+\.\d+\.\d+')
           echo "Detected Chrome version: $CHROME_VERSION"
           
           if [ -z "$CHROME_VERSION" ]; then
