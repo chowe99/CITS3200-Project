@@ -9,6 +9,8 @@ from app.database import (
     get_tables,
     get_instances,
     get_columns,
+    Instance,
+    SpreadsheetInstance,
     Spreadsheet,
     SpreadsheetRow,
     db
@@ -24,14 +26,60 @@ import plotly.graph_objs as go
 import csv
 import json
 import os
+import time
 from werkzeug.utils import secure_filename
 import hashlib
+
 import numpy as np
+from sqlalchemy import and_, or_
+
+
+LOCKFILE_PATH = '/mnt/irds/lockfile.lock'  # Path to the lock file on the NAS
+
+def acquire_lock(timeout=30, max_lock_age=300, check_interval=1):
+    """Attempt to acquire a lock by creating a lockfile.
+       If the lockfile is older than max_lock_age seconds, override it."""
+    start_time = time.time()
+    while True:
+        try:
+            # Attempt to create the lock file exclusively
+            fd = os.open(LOCKFILE_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            # Write the current timestamp to the lock file
+            with os.fdopen(fd, 'w') as f:
+                f.write(str(time.time()))
+            # Lock acquired
+            return True
+        except FileExistsError:
+            # Lock file exists, check its age
+            lock_age = time.time() - os.path.getmtime(LOCKFILE_PATH)
+            if lock_age > max_lock_age:
+                # Assume the lock is stale and override it
+                print("Stale lock detected. Overriding the lock.")
+                try:
+                    os.remove(LOCKFILE_PATH)
+                except FileNotFoundError:
+                    continue  # Another process might have removed it
+            else:
+                # Check if timeout has been reached
+                if time.time() - start_time > timeout:
+                    return False
+                time.sleep(check_interval)
+
+def release_lock():
+    """Release the lock by deleting the lockfile."""
+    try:
+        os.remove(LOCKFILE_PATH)
+    except FileNotFoundError:
+        pass  # Lock file already removed
+
 
 # Set up basic logging configuration
-logging.basicConfig(level=logging.DEBUG)  # Set logging level to debug
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s:%(name)s:%(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
-
 
 main = Blueprint('main', __name__)
 
@@ -60,61 +108,136 @@ def verify_password(stored_salt, stored_hash, password_attempt):
     pwd_hash = hashlib.pbkdf2_hmac('sha256', password_attempt.encode(), stored_salt, 100000)
     return pwd_hash == stored_hash
 
+
+# app/blueprints/main.py
+
 @main.route('/upload', methods=['POST'])
 def upload_file():
-    password = request.form.get('encrypt_password')
-    encrypt_data = bool(password)
-
-    if 'excel_files' not in request.files:
-        return jsonify({'success': False, 'message': 'No file part in the request.'})
-
-    files = request.files.getlist('excel_files')
+    logger.info("Received upload request.")
     
-    if not files:
-        return jsonify({'success': False, 'message': 'No file selected.'})
+    # Attempt to acquire the lock before writing
+    if not acquire_lock():
+        logger.warning("Lock acquisition failed. Another upload is in progress.")
+        return jsonify({
+            'success': False,
+            'message': 'Database is currently being updated by another user. Please try again later.'
+        }), 423
 
-    for file in files:
-        if allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            sheet_name = '03 - Shearing'  # Adjust as necessary
-            df = data_extractor(file, sheet_name)
-            name = filename.rsplit('.', 1)[0]
+    logger.debug("Lock acquired successfully.")
 
-            if encrypt_data:
-                # Encryption logic here
-                salt = os.urandom(16)
-                iv = os.urandom(16)
-                key = derive_key(password, salt)
-                password_salt, password_hash = hash_password(password)
+    try:
+        password = request.form.get('encrypt_password')
+        encrypt_data = bool(password)
+        logger.debug(f"Encryption password provided: {'Yes' if encrypt_data else 'No'}")
 
-                spreadsheet = Spreadsheet(
-                    spreadsheet_name=name,
-                    public=False,
-                    encrypted=True,
-                    key_salt=salt,
-                    iv=iv,
-                    password_salt=password_salt,
-                    password_hash=password_hash
-                )
-                db.session.add(spreadsheet)
-                db.session.commit()
+        if 'excel_files' not in request.files:
+            logger.error("No 'excel_files' part in the request.")
+            return jsonify({'success': False, 'message': 'No file part in the request.'})
 
-                result = insert_data_to_db(
-                    name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
-                )
-            else:
-                result = insert_data_to_db(name, df)
-            
-            if not result['success']:
-                return jsonify({'success': False, 'message': result['message']})
+        files = request.files.getlist('excel_files')
+        logger.debug(f"Number of files received: {len(files)}")
 
-             # Reset file pointer to read again for instance extraction
-            file.seek(0)
-            instances = find_instances(file)
-            if instances:
-                insert_instances_to_db(name, instances)
+        if not files:
+            logger.error("No files selected for upload.")
+            return jsonify({'success': False, 'message': 'No file selected.'})
 
-    return jsonify({'success': True, 'message': 'Files uploaded and processed successfully.'})
+        success_files = []
+        failed_files = []
+
+        # Begin a transaction for each file individually
+        for idx, file in enumerate(files, start=1):
+            if allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                logger.info(f"Processing file {idx}/{len(files)}: {filename}")
+
+                sheet_name = '03 - Shearing'  # Adjust as necessary
+                df = data_extractor(file, sheet_name)
+
+                if df.empty:
+                    logger.warning(f"No valid data extracted from file: {filename}")
+                    failed_files.append({'filename': filename, 'reason': 'No valid data extracted.'})
+                    continue  # Skip to the next file
+
+                name = filename.rsplit('.', 1)[0]
+                logger.debug(f"Spreadsheet name derived: {name}")
+
+                if encrypt_data:
+                    logger.debug("Encryption enabled for this file.")
+                    # Encryption logic here
+                    salt = os.urandom(16)
+                    iv = os.urandom(16)
+                    key = derive_key(password, salt)
+                    password_salt, password_hash = hash_password(password)
+
+                    spreadsheet = Spreadsheet(
+                        spreadsheet_name=name,
+                        public=False,
+                        encrypted=True,
+                        key_salt=salt,
+                        iv=iv,
+                        password_salt=password_salt,
+                        password_hash=password_hash
+                    )
+                    db.session.add(spreadsheet)
+                    db.session.commit()
+                    logger.debug(f"Added Spreadsheet object for {name} to the session.")
+
+                    result = insert_data_to_db(
+                        name, df, spreadsheet=spreadsheet, encrypt=True, encryption_key=key, iv=iv
+                    )
+                else:
+                    logger.debug("Encryption not enabled for this file.")
+                    result = insert_data_to_db(name, df)
+
+                if not result['success']:
+                    logger.error(f"Failed to insert data for file: {filename}. Reason: {result['message']}")
+                    failed_files.append({'filename': filename, 'reason': result['message']})
+                    db.session.rollback()  # Rollback current file's transaction
+                else:
+                    logger.info(f"Successfully inserted data for file: {filename}")
+                    success_files.append(filename)
+
+                # Reset file pointer to read again for instance extraction
+                file.seek(0)
+                instances = find_instances(file)
+                logger.debug(f"Found {len(instances)} instances in file: {filename}")
+
+                if instances:
+                    try:
+                        insert_instances_to_db(name, instances)
+                        logger.info(f"Inserted instances for file: {filename}")
+                    except Exception as e:
+                        logger.error(f"Failed to insert instances for file: {filename}. Reason: {str(e)}")
+                        failed_files.append({'filename': filename, 'reason': 'Failed to insert instances.'})
+                        db.session.rollback()  # Rollback current file's transaction
+
+                db.session.commit()  # Commit after each file
+
+        if success_files and not failed_files:
+            message = f"All files uploaded and processed successfully: {', '.join(success_files)}."
+            logger.info(message)
+            return jsonify({'success': True, 'message': message})
+        elif success_files and failed_files:
+            success_message = f"Successfully processed files: {', '.join(success_files)}."
+            failure_message = "; ".join([f"{f['filename']} failed: {f['reason']}" for f in failed_files])
+            combined_message = f"{success_message} {failure_message}"
+            logger.warning(combined_message)
+            return jsonify({'success': True, 'message': combined_message})
+        else:
+            failure_message = "; ".join([f"{f['filename']} failed: {f['reason']}" for f in failed_files])
+            logger.error(failure_message)
+            return jsonify({'success': False, 'message': failure_message}), 500
+
+    except Exception as e:
+        logger.exception(f"Error during upload: {e}")
+        # Rollback in case of unexpected errors
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An unexpected error occurred.'}), 500
+
+    finally:
+        # Ensure the lock is released even if an error occurs
+        release_lock()
+        logger.debug("Lock released after upload attempt.")
 
 @main.route('/')
 def home():
@@ -122,44 +245,18 @@ def home():
         # Get all available tables from the database
         tables = get_tables()
         instances = get_instances()
-    except Exception as e:
-        flash('Unable to connect to the database. Please ensure the NAS is mounted.', 'error')
-        tables = []
-        instances = {}
-    return render_template('home.html', tables=tables, instances=instances)
-
-@main.route('/load-table', methods=['POST'])
-def load_table():
-    table_names = request.form.getlist('table_name[]')
-    password = request.form.get('decrypt_password')  
-
-    # Verify passwords for encrypted spreadsheets
-    for table_name in table_names:
-        spreadsheet = Spreadsheet.query.filter_by(spreadsheet_name=table_name).first()
-        if not spreadsheet:
-            return jsonify({"success": False, "message": f"Spreadsheet '{table_name}' not found."})
-        if spreadsheet.encrypted:
-            if not password:
-                return jsonify({"success": False, "message": f"Password required for spreadsheet '{table_name}'."})
-            if not verify_password(spreadsheet.password_salt, spreadsheet.password_hash, password):
-                return jsonify({"success": False, "message": f"Incorrect password for spreadsheet '{table_name}'."})
-            # Store password in session for later use (consider security implications)
-            session[table_name] = password
-    try:
-        # Fetch columns
         columns = get_columns()
 
         x_axis_options = [col for col in columns if col != "spreadsheet_id"]
         y_axis_options = [col for col in columns if col not in ["spreadsheet_id", "time_start_of_stage", "id"]]
-
-        return jsonify({
-            "success": True,
-            "x_axis_options": x_axis_options,
-            "y_axis_options": y_axis_options
-        })
     except Exception as e:
-        logger.debug(f"Error loading table: {str(e)}")
-        return jsonify({"success": False, "message": f"Error loading table: {str(e)}"})
+        flash('Unable to connect to the database. Please ensure the NAS is mounted.', 'error')
+        tables = []
+        instances = {}
+        x_axis_options = []
+        y_axis_options = []
+    return render_template('home.html', tables=tables, instances=instances, x_axis_options=x_axis_options, y_axis_options=y_axis_options)
+
 
 def decrypt_value(encrypted_value, key, iv):
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
@@ -171,25 +268,80 @@ def decrypt_value(encrypted_value, key, iv):
 
 @main.route('/plot', methods=['POST'])
 def plot():
+    if not acquire_lock():
+        logger.warning("Plot request denied due to active lock.")
+        return jsonify({
+            'success': False,
+            'message': 'Another operation is in progress. Please try again later.'
+        }), 423
+
+    logger.info("Lock acquired for plotting.")
     try:
+        # Retrieve form data
         x_axis = request.form.get('x_axis')
         y_axis = request.form.getlist('y_axis')
-        filtered_spreadsheet_ids = request.form.get('filtered_spreadsheet_ids')
-        decrypt_password = request.form.get('decrypt_password')
+        selected_tables = request.form.getlist('table_name[]')
+        instances_json = request.form.get('instances_json')
+        
+        # Collect decryption passwords from the form
+        decrypt_passwords = {}
+        for table_name in selected_tables:
+            password_field = f"password_{table_name}"
+            decrypt_passwords[table_name] = request.form.get(password_field)
 
         preset = request.form.get('preset-options')
 
         if preset == "None":
+            # Input validation
             if not x_axis:
+                logger.error("Missing X-axis in plot request.")
                 return jsonify({"error": "X-axis field is missing from the request."}), 400
 
             if not y_axis:
+                logger.error("No Y-axis selected in plot request.")
                 return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
-
+              
             if not filtered_spreadsheet_ids:
                 return jsonify({"error": "No spreadsheets selected for plotting."}), 400
 
-        spreadsheet_ids = json.loads(filtered_spreadsheet_ids)
+        logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
+
+
+        # Process selected tables and instances to get spreadsheet IDs
+        spreadsheet_ids = set()
+
+        if selected_tables:
+            # Get spreadsheet IDs from selected tables
+            spreadsheets = Spreadsheet.query.filter(Spreadsheet.spreadsheet_name.in_(selected_tables)).all()
+            spreadsheet_ids.update([s.spreadsheet_id for s in spreadsheets])
+            logger.debug(f"Found {len(spreadsheet_ids)} spreadsheet IDs from selected tables.")
+
+
+        if instances_json:
+            instances = json.loads(instances_json)
+            for instance in instances:
+                name = instance['name']
+                values = instance['values']
+                # Find instance IDs that match the name and selected values
+                instance_ids = Instance.query.filter(
+                    Instance.instance_name == name,
+                    Instance.instance_value.in_(values)
+                ).with_entities(Instance.instance_id).all()
+                if not instance_ids:
+                    logger.warning(f"No instances found for {name} with values {values}.")
+                    continue
+                instance_ids = [i[0] for i in instance_ids]
+                # Find spreadsheets associated with these instances
+                spreadsheet_ids_query = SpreadsheetInstance.query.filter(
+                    SpreadsheetInstance.instance_id.in_(instance_ids)
+                ).with_entities(SpreadsheetInstance.spreadsheet_id)
+                spreadsheet_ids.update([s[0] for s in spreadsheet_ids_query.all()])
+            logger.debug(f"Total unique spreadsheet IDs after processing instances: {len(spreadsheet_ids)}")
+
+
+        if not spreadsheet_ids:
+            logger.error("No spreadsheets match the selected filters.")
+            return jsonify({"error": "No spreadsheets match the selected filters."}), 400
 
         # Fetch data using SQLAlchemy
         data_frames = []
@@ -228,12 +380,19 @@ def plot():
                 logger.debug(f"Spreadsheet ID {spreadsheet_id} not found.")
                 continue
             table_name = spreadsheet.spreadsheet_name
-            color_map[table_name] = colors[idx % len(colors)]  # Map table name to a color
+            color_map[table_name] = colors[idx % len(colors)]
+            logger.debug(f"Processing Spreadsheet '{table_name}' with color '{color_map[table_name]}'.")
 
             if spreadsheet.encrypted:
+                logger.debug(f"Spreadsheet '{table_name}' is encrypted. Attempting decryption.")
+                
+                # Retrieve the corresponding password for this encrypted spreadsheet
+                decrypt_password = decrypt_passwords.get(table_name)
                 if not decrypt_password:
+                    logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'.")
                     return jsonify({"error": f"Password required for spreadsheet '{table_name}'."}), 401
                 if not verify_password(spreadsheet.password_salt, spreadsheet.password_hash, decrypt_password):
+                    logger.error(f"Incorrect decryption password for Spreadsheet '{table_name}'.")
                     return jsonify({"error": f"Incorrect password for spreadsheet '{table_name}'."}), 401
                 key = derive_key(decrypt_password, spreadsheet.key_salt)
                 iv = spreadsheet.iv
@@ -254,13 +413,14 @@ def plot():
                     decrypted_row['source'] = table_name
                     data.append(decrypted_row)
                 df = pd.DataFrame(data)
-                # Drop rows with NaN in x_axis
-                df.dropna(subset=[x_axis], inplace=True)
+                df = df.dropna(subset=[x_axis])
                 data_frames.append(df)
+                logger.debug(f"Decrypted and cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
+
             else:
                 rows = SpreadsheetRow.query.filter_by(spreadsheet_id=spreadsheet.spreadsheet_id).all()
                 if not rows:
-                    logger.debug(f"No rows found for spreadsheet '{table_name}'.")
+                    logger.debug(f"No rows found for Spreadsheet '{table_name}'.")
                     continue
                 data_dicts = []
                 for row in rows:
@@ -271,14 +431,19 @@ def plot():
                 for col in [x_axis] + y_axis:
                     if col in df.columns:
                         df[col] = pd.to_numeric(df[col], errors='coerce').round(4)
-                # Drop rows with NaN in x_axis
-                df.dropna(subset=[x_axis], inplace=True)
+                    else:
+                        logger.warning(f"Column '{col}' not found in Spreadsheet '{table_name}'.")
+                        df[col] = None
+                df = df.dropna(subset=[x_axis])
+                logger.debug(f"Cleaned data for Spreadsheet '{table_name}': {len(df)} rows.")
                 data_frames.append(df)
 
         if not data_frames:
+            logger.error("No data found for the selected spreadsheets.")
             return jsonify({"error": "No data found for the selected spreadsheets."}), 404
 
         data = pd.concat(data_frames, ignore_index=True)
+        logger.info(f"Combined data contains {len(data)} rows.")
 
         # Create a Plotly figure
         fig = go.Figure()
@@ -327,7 +492,7 @@ def plot():
                         )
                     ))   
             y_axis = [y_preset] + selected_y_columns # Combining calculated column name and selected columns names
-        
+            logger.debug(f"Added plot trace for '{table_name} - {y}'.")        
         else:    
             for y in y_axis:
                 for table_name in data['source'].unique():
@@ -354,7 +519,7 @@ def plot():
         x_axis_name = x_axis.replace('_', ' ').capitalize()
         y_axis_name = ', '.join([col.replace('_', ' ').capitalize() for col in y_axis])
         title_name = f"{y_axis_name} vs {x_axis_name}"
-        
+
         # Customize the layout with legend
         fig.update_layout(
             title=title_name,
@@ -369,26 +534,32 @@ def plot():
                 tickformat='.2f'
             ),
             margin=dict(l=50, r=50, t=50, b=50),
-            dragmode='pan',  # Enables dragging
+            dragmode='pan',
             legend=dict(
                 x=0.95,
                 y=0.95,
                 xanchor='right',
                 yanchor='top',
                 traceorder="normal",
-                bgcolor="rgba(255, 255, 255, 0.5)",  # Transparent background for the legend
+                bgcolor="rgba(255, 255, 255, 0.5)",
                 bordercolor="Black",
                 borderwidth=1
             )
         )
+        logger.info("Plotly figure created successfully.")
 
         graph_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+        logger.debug("Serialized Plotly figure to JSON.")
 
         return jsonify({"graph_json": graph_json})
 
     except Exception as e:
-        logger.exception(f"Error during plotting: {str(e)}")
-        return jsonify({"error": f"Error during plotting: {str(e)}"}), 500
+        logger.exception(f"Error during plotting: {e}")
+        return jsonify({"error": f"Error during plotting: {e}"}), 500
+
+    finally:
+        release_lock()
+        logger.info("Lock released after plotting attempt.")
 
 @main.route('/add-data', methods=['GET', 'POST'])
 def add_data():
@@ -484,121 +655,8 @@ def get_tables_route():
     tables = get_tables()
     return jsonify({'tables': tables})
 
-@main.route('/load-instances', methods=['POST'])
-def load_instances():
-    try:
-        # Retrieve instances from the form data
-        instances_json = request.form.get('instances')
-        if not instances_json:
-            return jsonify({"success": False, "message": "No instances provided."})
-
-        instances = json.loads(instances_json)
-
-        # Find spreadsheets that match the selected instances and values
-        matching_spreadsheet_ids = set()
-        for instance in instances:
-            name = instance['name']
-            values = instance['values']
-            # Find instance IDs that match the name and selected values
-            instance_ids = Instance.query.filter(
-                Instance.instance_name == name,
-                Instance.instance_value.in_(values)
-            ).with_entities(Instance.instance_id).all()
-            if not instance_ids:
-                continue
-            instance_ids = [i[0] for i in instance_ids]
-            # Find spreadsheets associated with these instances
-            spreadsheet_ids = SpreadsheetInstance.query.filter(
-                SpreadsheetInstance.instance_id.in_(instance_ids)
-            ).with_entities(SpreadsheetInstance.spreadsheet_id).all()
-            spreadsheet_ids = [si[0] for si in spreadsheet_ids]
-            if not matching_spreadsheet_ids:
-                matching_spreadsheet_ids.update(spreadsheet_ids)
-            else:
-                # Intersection to ensure spreadsheets match all selected instances
-                matching_spreadsheet_ids.intersection_update(spreadsheet_ids)
-
-        if not matching_spreadsheet_ids:
-            return jsonify({"success": False, "message": "No spreadsheets match the selected instances."})
-
-        # Retrieve column options
-        columns = get_columns()
-        x_axis_options = [col for col in columns if col != "spreadsheet_id"]
-        y_axis_options = [col for col in columns if col not in ["spreadsheet_id", "time_start_of_stage", "id"]]
-
-        return jsonify({
-            "success": True,
-            "x_axis_options": x_axis_options,
-            "y_axis_options": y_axis_options,
-            "filtered_spreadsheet_ids": list(matching_spreadsheet_ids)
-        })
-
-    except Exception as e:
-        logger.debug(f"Error loading instances: {str(e)}")
-        return jsonify({"success": False, "message": f"Error loading instances: {str(e)}"})
-
-
-@main.route('/load-filters', methods=['POST'])
-def load_filters():
-    try:
-        # Get filter type
-        filter_type = request.form.get('filter_type', 'both')
-
-        # Get selected tables
-        selected_tables = request.form.getlist('table_name[]')
-        selected_spreadsheet_query = Spreadsheet.query
-
-        if selected_tables:
-            # Filter spreadsheets by selected table names
-            selected_spreadsheet_query = selected_spreadsheet_query.filter(
-                Spreadsheet.spreadsheet_name.in_(selected_tables)
-            )
-
-        # Get instances from the form data
-        instances_json = request.form.get('instances', '[]')  # Default to empty list if not provided
-
-        logger.debug(f"Selected Tables: {selected_tables}")
-        logger.debug(f"Instances JSON: {instances_json}")
-        logger.debug(f"Filter Type: {filter_type}")
-
-        try:
-            instances = json.loads(instances_json)
-        except json.JSONDecodeError:
-            instances = []
-
-        if instances:
-            # Apply instance filters
-            for instance in instances:
-                name = instance['name']
-                values = instance['values']
-                selected_spreadsheet_query = selected_spreadsheet_query.filter(
-                    Spreadsheet.instances.any(
-                        and_(
-                            Instance.instance_name == name,
-                            Instance.instance_value.in_(values)
-                        )
-                    )
-                )
-
-        # Execute the query to get the final list of spreadsheet IDs
-        final_spreadsheet_ids = [s.spreadsheet_id for s in selected_spreadsheet_query.all()]
-
-        if not final_spreadsheet_ids:
-            return jsonify({"success": False, "message": "No spreadsheets match the selected filters."})
-
-        # Retrieve column options
-        columns = get_columns()
-        x_axis_options = [col for col in columns if col != "spreadsheet_id"]
-        y_axis_options = [col for col in columns if col not in ["spreadsheet_id", "time_start_of_stage", "id"]]
-
-        return jsonify({
-            "success": True,
-            "x_axis_options": x_axis_options,
-            "y_axis_options": y_axis_options,
-            "filtered_spreadsheet_ids": list(final_spreadsheet_ids)
-        })
-
-    except Exception as e:
-        logger.exception(f"Error loading filters: {str(e)}")
-        return jsonify({"success": False, "message": f"Error loading filters: {str(e)}"})
+@main.route('/get-instances', methods=['GET'])
+def get_instances_route():
+    instances = get_instances()
+    return jsonify({'instances': instances})
 

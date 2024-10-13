@@ -31,28 +31,33 @@
       <button type="submit">Upload and Process</button>
     </form>
 
-    <label for="form-select">Filter by:</label>
-    <select id="form-select">
-      <option value="table">Spreadsheet(s)</option>
-      <option value="instance">Instance(s)</option>
-      <option value="both" selected>Both</option>
-    </select>
-
     <form id="filter-form">
-      <div id="spreadsheet-selection">
-        <label>Select table(s):</label>
-        <div id="table-checkboxes">
-          {% for table in tables %}
-          <input type="checkbox" name="table_name[]" value="{{ table }}"> {{ table }}<br>
-          {% endfor %}
-        </div>
-      </div>
 
+    <!-- Spreadsheets selection -->
+    <div id="spreadsheet-selection">
+      <label>Select table(s):</label>
+      <div id="table-checkboxes">
+        {% for table in tables %}
+        <div>
+          <!-- Checkbox for table selection -->
+          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> {{ table.spreadsheet_name }}<br>
+          
+          <!-- Conditional password input for encrypted tables -->
+          {% if table.encrypted %}
+          <label for="password_{{ table.spreadsheet_name }}">Password for {{ table.spreadsheet_name }}:</label>
+          <input type="password" id="password_{{ table.spreadsheet_name }}" name="password_{{ table.spreadsheet_name }}" placeholder="Password"><br>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+      <!-- Instances selection -->
       <div id="instance-selection">
         <label for="instance-select">Select instance(s):</label>
         {% for key, values in instances.items() %}
         <div>
-          <input type="checkbox" id="{{ key }}" name="instances" value="{{ key }}" onclick="toggleValueChecklist(this)">
+          <input type="checkbox" id="{{ key }}" name="instance_names" value="{{ key }}" onclick="toggleValueChecklist(this)">
           <label for="{{ key }}">{{ key }}</label>
           <div class="value-checklist" style="display: none;">
             {% for value in values %}
@@ -64,13 +69,7 @@
         {% endfor %}
       </div>
 
-      <label for="decrypt_password">Decryption Password:</label>
-      <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
-      <button type="submit">Load Data</button>
-    </form>
-
-    <!-- Plot form, hidden until a table is selected -->
-    <form id="plot-form" style="display: none;">
+      <!-- X-Axis selection -->
       <div>
         <h3>Preset plot options:</h3>
         <select name="preset-options">
@@ -94,9 +93,9 @@
         <p>X-axis is only added if preset plot options is set at 'None'</p>
       </div>
 
+      <!-- Y-Axis selection -->
       <div>
         <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
-        <!-- Add ID to this div -->
         <div id="y-axis-container">
           {% for column in y_axis_options %}
           {% if column == 'p' %}
@@ -108,41 +107,17 @@
         </div>
         <p>Y-axes can be added to preset plots options.</p>
       </div>
-      <input type="hidden" id="filtered-spreadsheet-ids" name="filtered_spreadsheet_ids" value="">
-      <div id="plot-message-area"></div>
+
+      <!-- Decryption password -->
+      <label for="decrypt_password">Decryption Password:</label>
+      <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
+
       <button type="submit">Generate Plot</button>
     </form>
 
     <!-- Container to display the plot -->
     <h2>Generated Plot:</h2>
     <div id="plot-container">
-    </div>
-
-    <!-- Button to open the add column modal -->
-    <button id="add-column-btn">Add New Column</button>
-
-    <!-- Modal for adding a new column -->
-    <div id="add-column-modal" style="display: none;">
-      <h2>Add a New Column</h2>
-      <div id="add-column-message-area"></div>
-      <form id="add-column-form">
-        <label for="column-name">Column Name:</label>
-        <input type="text" id="column-name" name="column_name" required><br>
-
-        <label for="column-type">Column Data Type:</label>
-        <select id="column-type" name="column_type" required>
-          <option value="INTEGER">INTEGER</option>
-          <option value="REAL">REAL</option>
-          <option value="TEXT">TEXT</option>
-        </select><br>
-
-        <label for="column-data">Enter Data (comma-separated) or Upload CSV:</label>
-        <textarea id="column-data" name="column_data"></textarea><br>
-        <input type="file" id="column-file" name="column_file" accept=".csv"><br>
-
-        <button type="submit">Add Column</button>
-        <button type="button" id="close-modal">Cancel</button>
-      </form>
     </div>
 
     <!-- Link to external JavaScript file -->

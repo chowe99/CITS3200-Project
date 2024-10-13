@@ -4,9 +4,13 @@ from .models import Spreadsheet, Instance, SpreadsheetInstance, SpreadsheetRow
 from .connection import db
 
 def get_tables():
-    """Retrieve all spreadsheet names from the database."""
-    tables = Spreadsheet.query.with_entities(Spreadsheet.spreadsheet_name).all()
-    return [table[0] for table in tables]
+    """Retrieve all spreadsheet names and encryption status from the database."""
+    # Retrieve both the spreadsheet name and the 'encrypted' field
+    tables = Spreadsheet.query.with_entities(Spreadsheet.spreadsheet_name, Spreadsheet.encrypted).all()
+    
+    # Return a list of dictionaries with the spreadsheet name and encryption status
+    return [{"spreadsheet_name": table[0], "encrypted": table[1]} for table in tables]
+
 
 def get_instances():
     """Retrieve all instances from the database."""

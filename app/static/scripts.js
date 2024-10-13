@@ -1,3 +1,4 @@
+// Function to show messages
 async function showMessage(message, isSuccess, elementId) {
   const messageArea = document.getElementById(elementId);
   if (messageArea) {
@@ -7,7 +8,7 @@ async function showMessage(message, isSuccess, elementId) {
   }
 }
 
-// Handle the upload form submission
+// Update the upload form submission handler to fetch instances after successful upload
 document
   .getElementById("upload-form")
   .addEventListener("submit", async function (event) {
@@ -26,7 +27,7 @@ document
       if (data.success) {
         // Display success message
         await showMessage(data.message, true, "message-area");
-        // Refresh the table list
+        // Refresh the table and instance lists
         await refreshTableList();
       } else {
         // Display error message
@@ -42,14 +43,87 @@ document
     }
   });
 
-// Function to refresh the table list after uploading new spreadsheets
+// Function to fetch and display instances
+async function fetchAndDisplayInstances() {
+  try {
+    const response = await fetch("/get-instances");
+    const data = await response.json();
+    const instanceSelection = document.getElementById("instance-selection");
+    instanceSelection.innerHTML = ""; // Clear existing options
+
+    if (data.instances && Object.keys(data.instances).length > 0) {
+      const label = document.createElement("label");
+      label.setAttribute("for", "instance-select");
+      label.textContent = "Select instance(s):";
+      instanceSelection.appendChild(label);
+
+      for (const [instanceName, values] of Object.entries(data.instances)) {
+        const div = document.createElement("div");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = instanceName;
+        checkbox.name = "instance_names";
+        checkbox.value = instanceName;
+        checkbox.onclick = function () {
+          toggleValueChecklist(this);
+        };
+
+        const label = document.createElement("label");
+        label.setAttribute("for", instanceName);
+        label.textContent = instanceName;
+
+        div.appendChild(checkbox);
+        div.appendChild(label);
+
+        const checklist = document.createElement("div");
+        checklist.className = "value-checklist";
+        checklist.style.display = "none";
+
+        values.forEach((value) => {
+          const valueCheckbox = document.createElement("input");
+          valueCheckbox.type = "checkbox";
+          valueCheckbox.id = `${instanceName}_${value}`;
+          valueCheckbox.name = `${instanceName}_values`;
+          valueCheckbox.value = value;
+
+          const valueLabel = document.createElement("label");
+          valueLabel.setAttribute("for", `${instanceName}_${value}`);
+          valueLabel.textContent = value;
+
+          checklist.appendChild(valueCheckbox);
+          checklist.appendChild(valueLabel);
+          checklist.appendChild(document.createElement("br"));
+        });
+
+        div.appendChild(checklist);
+        instanceSelection.appendChild(div);
+      }
+    } else {
+      const noInstancesMsg = document.createElement("p");
+      noInstancesMsg.textContent = "No instances available.";
+      instanceSelection.appendChild(noInstancesMsg);
+    }
+  } catch (error) {
+    console.error("Error fetching instances:", error);
+    await showMessage("Error fetching instance list.", false, "message-area");
+  }
+}
+
+// Modify refreshTableList to also fetch instances
 async function refreshTableList() {
   try {
-    const response = await fetch("/get-tables");
-    const data = await response.json();
+    const [tablesResponse, instancesResponse] = await Promise.all([
+      fetch("/get-tables"),
+      fetch("/get-instances"),
+    ]);
+
+    const tablesData = await tablesResponse.json();
+    const instancesData = await instancesResponse.json();
+
     const tableCheckboxes = document.getElementById("table-checkboxes");
     tableCheckboxes.innerHTML = ""; // Clear existing options
-    data.tables.forEach((table) => {
+    tablesData.tables.forEach((table) => {
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.name = "table_name[]";
@@ -62,17 +136,24 @@ async function refreshTableList() {
       tableCheckboxes.appendChild(label);
       tableCheckboxes.appendChild(document.createElement("br"));
     });
+
+    // Now, fetch and display instances
+    await fetchAndDisplayInstances();
   } catch (error) {
-    console.error("Error fetching table list:", error);
-    await showMessage("Error fetching table list.", false, "message-area");
+    console.error("Error refreshing table and instance lists:", error);
+    await showMessage(
+      "Error refreshing table and instance lists.",
+      false,
+      "message-area",
+    );
   }
 }
-
-// Handle filter form submission (combined table and instance filters)
+// Handle the filter form submission
 document
   .getElementById("filter-form")
   .addEventListener("submit", async function (event) {
     event.preventDefault();
+    console.log("Filter form submitted.");
 
     const formData = new FormData(event.target);
 
@@ -80,92 +161,103 @@ document
     const selectedTables = Array.from(
       document.querySelectorAll('input[name="table_name[]"]:checked'),
     ).map((checkbox) => checkbox.value);
+    console.log("Selected Tables:", selectedTables);
 
     // Collect selected instances and their values
     const instances = [];
-    document.querySelectorAll('input[name="instances"]').forEach((checkbox) => {
-      const instanceName = checkbox.value;
-      const selectedValues = [];
-      document
-        .querySelectorAll(`input[name="${instanceName}_values"]:checked`)
-        .forEach((valueCheckbox) => {
-          selectedValues.push(valueCheckbox.value);
-        });
-      if (selectedValues.length > 0) {
-        instances.push({ name: instanceName, values: selectedValues });
-      }
-    });
+    document
+      .querySelectorAll('input[name="instance_names"]:checked')
+      .forEach((checkbox) => {
+        const instanceName = checkbox.value;
+        const selectedValues = [];
+        document
+          .querySelectorAll(`input[name="${instanceName}_values"]:checked`)
+          .forEach((valueCheckbox) => {
+            selectedValues.push(valueCheckbox.value);
+          });
+        if (selectedValues.length > 0) {
+          instances.push({ name: instanceName, values: selectedValues });
+        }
+      });
+    console.log("Collected Instances:", instances);
+
+    // Collect x_axis value
+    const x_axis_value = document.querySelector('select[name="x_axis"]').value;
+
+    // Collect selected y_axis values
+    const y_axis_values = Array.from(
+      document.querySelectorAll('input[name="y_axis"]:checked'),
+    ).map((checkbox) => checkbox.value);
+
+    console.log("X Axis:", x_axis_value);
+    console.log("Y Axis:", y_axis_values);
+
+    // Ensure x_axis and y_axis are selected
+    if (!x_axis_value) {
+      await showMessage(
+        "Please select an X-Axis value.",
+        false,
+        "plot-message-area",
+      );
+      return;
+    }
+
+
+    if (y_axis_values.length === 0) {
+      await showMessage(
+        "Please select at least one Y-Axis value.",
+        false,
+        "plot-message-area",
+      );
+      return;
+    }
 
     // Include selected tables and instances in form data
     selectedTables.forEach((table) => formData.append("table_name[]", table));
-    formData.append("instances", JSON.stringify(instances));
+    formData.append("instances_json", JSON.stringify(instances));
 
-    // Determine which filters are applied based on user's selection
-    const filterType = document.getElementById("form-select").value;
-    formData.append("filter_type", filterType);
+    // Include x_axis and y_axis in form data
+    formData.append("x_axis", x_axis_value);
+    y_axis_values.forEach((y_axis) => formData.append("y_axis", y_axis));
+
+    // Decryption password
+    const decryptPassword = document.getElementById("decrypt_password").value;
+    formData.append("decrypt_password", decryptPassword);
 
     try {
-      const response = await fetch("/load-filters", {
+      const response = await fetch("/plot", {
         method: "POST",
         body: formData,
       });
       const data = await response.json();
-      if (data.success) {
-        // Update plot options and display plot form
-        document.getElementById("plot-form").style.display = "block";
-        await updatePlotOptions(data.x_axis_options, data.y_axis_options);
-
-        // Store the filtered spreadsheet IDs for plotting
-        const filteredSpreadsheetIds = data.filtered_spreadsheet_ids;
-        const hiddenInput = document.getElementById("filtered-spreadsheet-ids");
-        hiddenInput.value = JSON.stringify(filteredSpreadsheetIds);
+      console.log("Response from /plot:", data);
+      if (data.graph_json) {
+        const plotData = JSON.parse(data.graph_json);
+        Plotly.react("plot-container", plotData.data, plotData.layout);
+        await showMessage(
+          "Plot generated successfully.",
+          true,
+          "plot-message-area",
+        );
+      } else if (data.error) {
+        await showMessage(data.error, false, "plot-message-area");
       } else {
-        await showMessage(data.message, false, "message-area");
+        await showMessage(
+          "An unknown error occurred.",
+          false,
+          "plot-message-area",
+        );
       }
     } catch (error) {
       console.error("Error:", error);
       await showMessage(
-        "An error occurred while applying filters.",
+        "An error occurred while generating the plot.",
         false,
-        "message-area",
+        "plot-message-area",
       );
     }
   });
-
-// Function to update plot options based on loaded columns
-async function updatePlotOptions(xOptions, yOptions) {
-  const xAxisSelect = document.querySelector('select[name="x_axis"]');
-  const yAxisContainer = document.getElementById("y-axis-container");
-
-  // Clear current options
-  xAxisSelect.innerHTML = "";
-  yAxisContainer.innerHTML = "";
-
-  // Populate new options for X-Axis
-  xOptions.forEach((column) => {
-    const option = document.createElement("option");
-    option.value = column;
-    option.textContent = column;
-    xAxisSelect.appendChild(option);
-  });
-
-  // Populate new checkboxes for Y-Axis
-  yOptions.forEach((column) => {
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.name = "y_axis";
-    checkbox.value = column;
-
-    const label = document.createElement("label");
-    label.textContent = column;
-
-    yAxisContainer.appendChild(checkbox);
-    yAxisContainer.appendChild(label);
-    yAxisContainer.appendChild(document.createElement("br"));
-  });
-}
-
-// Handle the plot form submission
+  
 document
   .getElementById("plot-form")
   .addEventListener("submit", async function (event) {
@@ -229,38 +321,43 @@ document
       console.error("Error:", error);
       await showMessage("Error generating plot.", false, "plot-message-area");
     }
+  });  
+
+// Function to update plot options based on loaded columns
+async function updatePlotOptions(xOptions, yOptions) {
+  const xAxisSelect = document.querySelector('select[name="x_axis"]');
+  const yAxisContainer = document.getElementById("y-axis-container");
+
+  // Clear current options
+  xAxisSelect.innerHTML = "";
+  yAxisContainer.innerHTML = "";
+
+  // Populate new options for X-Axis
+  xOptions.forEach((column) => {
+    const option = document.createElement("option");
+    option.value = column;
+    option.textContent = column;
+    xAxisSelect.appendChild(option);
   });
 
-// Function to show or hide forms based on filter selection
-async function showSelectedForm() {
-  const selectedForm = document.getElementById("form-select").value;
-  const spreadsheetSelection = document.getElementById("spreadsheet-selection");
-  const instanceSelection = document.getElementById("instance-selection");
+  // Populate new checkboxes for Y-Axis
+  yOptions.forEach((column) => {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "y_axis";
+    checkbox.value = column;
 
-  if (selectedForm === "table") {
-    spreadsheetSelection.style.display = "block";
-    instanceSelection.style.display = "none";
-  } else if (selectedForm === "instance") {
-    spreadsheetSelection.style.display = "none";
-    instanceSelection.style.display = "block";
-  } else {
-    spreadsheetSelection.style.display = "block";
-    instanceSelection.style.display = "block";
-  }
+    const label = document.createElement("label");
+    label.textContent = column;
+
+    yAxisContainer.appendChild(checkbox);
+    yAxisContainer.appendChild(label);
+    yAxisContainer.appendChild(document.createElement("br"));
+  });
 }
 
-// Initialize form visibility on page load
-window.onload = async () => {
-  await showSelectedForm();
-};
-
-// Event listener for filter type selection
-document.getElementById("form-select").addEventListener("change", async () => {
-  await showSelectedForm();
-});
-
 // Function to toggle visibility of instance value checklists
-async function toggleValueChecklist(checkbox) {
+function toggleValueChecklist(checkbox) {
   const valueChecklist =
     checkbox.parentElement.querySelector(".value-checklist");
   if (checkbox.checked) {
@@ -282,12 +379,7 @@ document
   });
 
 document
-  .getElementById("plot-form")
+  .getElementById("filter-form")
   .addEventListener("change", async function () {
     await showMessage("", true, "plot-message-area"); // Clear the plot message area
   });
-
-// Show add columns when button is clicked
-document.getElementById("add-column-btn").addEventListener("click", function() {
-document.getElementById("add-column-modal").style.display = "block"; // Show the modal
-});
