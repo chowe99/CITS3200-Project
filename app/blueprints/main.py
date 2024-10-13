@@ -296,10 +296,7 @@ def plot():
             if not y_axis:
                 logger.error("No Y-axis selected in plot request.")
                 return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
-              
-            if not filtered_spreadsheet_ids:
-                return jsonify({"error": "No spreadsheets selected for plotting."}), 400
-
+           
         logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
 
