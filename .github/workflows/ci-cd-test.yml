@@ -12,7 +12,6 @@ on:
       - main
       - release
 
-
 jobs:
   build-and-test:
     runs-on: ubuntu-latest  # Use GitHub's Ubuntu runner
@@ -37,20 +36,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # Step 4: Install Dependencies
+      # Step 4: Install SQLCipher Dependencies
+      - name: Install SQLCipher Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlcipher-dev
+
+      # Step 5: Install Dependencies
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir -r requirements.txt
-          pip install pytest selenium
 
-      # Step 5: Install Google Chrome
+      # Step 6: Install Google Chrome
       - name: Install Google Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
-      # Step 6: Install ChromeDriver
+      # Step 7: Install ChromeDriver
       - name: Install ChromeDriver
         run: |
           CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
@@ -62,7 +66,7 @@ jobs:
           sudo chmod +x /usr/local/bin/chromedriver
           rm chromedriver_linux64.zip
 
-      # Step 7: Set NAS_MOUNT_PATH to Simulated Directory
+      # Step 8: Set NAS_MOUNT_PATH to Simulated Directory
       - name: Set NAS_MOUNT_PATH to Simulated Directory
         run: |
           mkdir -p tests/integration
@@ -70,12 +74,12 @@ jobs:
           # Ensure the simulated directory exists and contains necessary files
           cp tests/e2e/test_spreadsheet.xlsx tests/integration/soil_test_results.db || true  # Copy a sample DB if needed
 
-      # Step 8: Start Docker Compose Services
+      # Step 9: Start Docker Compose Services
       - name: Start Docker Compose Services
         run: |
           docker-compose up -d
 
-      # Step 9: Wait for Flask App to be Healthy
+      # Step 10: Wait for Flask App to be Healthy
       - name: Wait for Flask App to be Healthy
         run: |
           for i in {1..30}; do
@@ -87,7 +91,7 @@ jobs:
             sleep 2
           done
 
-      # Step 10: Run End-to-End Tests
+      # Step 11: Run End-to-End Tests
       - name: Run End-to-End Tests
         env:
           TEST_ENCRYPT_PASSWORD: ${{ secrets.TEST_ENCRYPT_PASSWORD }}  # Securely inject secret
@@ -98,8 +102,7 @@ jobs:
           # Run pytest
           pytest tests/e2e/test_user_flow.py
 
-      # Step 11: Shutdown Docker Compose Services
+      # Step 12: Shutdown Docker Compose Services
       - name: Shutdown Docker Compose Services
         run: |
           docker-compose down
-
