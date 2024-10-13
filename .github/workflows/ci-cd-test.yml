@@ -95,7 +95,7 @@ jobs:
       # Step 10: Wait for Flask App to be Healthy
       - name: Wait for Flask App to be Healthy
         run: |
-          for i in {1..20}; do
+          for i in {1..30}; do
             if curl -s http://localhost:5123/ > /dev/null; then
               echo "Flask app is up and running!"
               break
