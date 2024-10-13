@@ -84,7 +84,6 @@ jobs:
             mkdir -p tests/integration
             echo "Simulating NAS by using tests/integration directory."
             # Ensure the simulated directory exists and contains necessary files
-            cp tests/e2e/test_spreadsheet.xlsx tests/integration/soil_test_results.db || true  # Copy a sample DB if needed
           fi
           
       # Step 9: Start Docker Compose Services
@@ -111,7 +110,7 @@ jobs:
         run: |
           # Dynamically replace the spreadsheet path in the test script
           sed -i "s|./tests/e2e/test_spreadsheet_sample.xlsx|./tests/e2e/test_spreadsheet.xlsx|" tests/e2e/test_user_flow.py
-          
+ 
           # Run pytest
           pytest tests/e2e/test_user_flow.py
 

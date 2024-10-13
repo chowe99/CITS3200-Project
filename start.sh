@@ -371,14 +371,14 @@ done
 # =============================================================================
 case "$OSTYPE" in
   linux*)
-    xdg-open http://0.0.0.0:5123  # Linux
+    xdg-open http://127.0.0.1:5123  # Linux
     ;;
   darwin*)
-    open http://0.0.0.0:5123  # macOS
+    open http://127.0.0.1:5123  # macOS
     ;;
   cygwin* | msys* | win32*)
     # Use 'start' via cmd.exe for Windows
-    cmd.exe /c start "" "http://0.0.0.0:5123"
+    cmd.exe /c start "" "http://127.0.0.1:5123"
     ;;
   *)
     echo "Warning: OS not recognized. Please manually open the browser at http://127.0.0.1:5123"

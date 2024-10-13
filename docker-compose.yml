@@ -17,10 +17,10 @@ services:
       SMB_PASSWORD: "${SMB_PASSWORD}"
       REAL_NAS: "${REAL_NAS}"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://0.0.0.0:5123"]
-      interval: 2s
-      timeout: 60s
-      retries: 5
+      test: ["CMD", "curl", "-f", "http://localhost:5123"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   smb:
