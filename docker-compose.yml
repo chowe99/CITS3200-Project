@@ -1,12 +1,18 @@
-version: '3.9'
 services:
   web:
     build: .
     ports:
-      - "5000:5000"
+      - "5123:5123"
     volumes:
-      - .:/app
+      - ".:/app"
+      - "${NAS_MOUNT_PATH}:/mnt/irds"  # Bind-mount the NAS_MOUNT_PATH to /mnt/irds in the container
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=development
-      - FLASK_DEBUG=1  # Enable Flask debug mode
+      - FLASK_DEBUG=1
+      - DATABASE_PATH=/mnt/irds/soil_test_results.db  # Use environment variable in the app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:5123"]
+      interval: 2s
+      timeout: 60s
+      retries: 5
