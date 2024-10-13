@@ -6,7 +6,7 @@ __pycache__/
 *.DS_Store
 
 # Test Spreadsheets
-tests/e2e/*.xlsx
+# tests/e2e/*.xlsx
 
 # Secrets
 .secrets

@@ -247,12 +247,18 @@ def home():
 
         x_axis_options = [col for col in columns if col != "spreadsheet_id"]
         y_axis_options = [col for col in columns if col not in ["spreadsheet_id", "time_start_of_stage", "id"]]
+
+        logger.debug(f"Loaded tables: {tables}")
+        logger.debug(f"Loaded instances: {instances}")
+        logger.debug(f"X-axis options: {x_axis_options}")
+        logger.debug(f"Y-axis options: {y_axis_options}")
     except Exception as e:
         flash('Unable to connect to the database. Please ensure the NAS is mounted.', 'error')
         tables = []
         instances = {}
         x_axis_options = []
         y_axis_options = []
+        logger.error(f"Error loading home page data: {e}")
     return render_template('home.html', tables=tables, instances=instances, x_axis_options=x_axis_options, y_axis_options=y_axis_options)
 
 
