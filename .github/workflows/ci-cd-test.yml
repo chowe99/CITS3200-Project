@@ -57,7 +57,7 @@ jobs:
       # Step 7: Install ChromeDriver
       - name: Install ChromeDriver
         run: |
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          CHROME_VERSION=$(google-chrome --version | grep -oE '\d+\.\d+\.\d+')
           CHROME_MAJOR_VERSION=${CHROME_VERSION%%.*}
           CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION")
           wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
