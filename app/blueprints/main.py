@@ -34,7 +34,7 @@ import numpy as np
 from sqlalchemy import and_, or_
 
 
-LOCKFILE_PATH = '/mnt/irds/lockfile.lock'  # Path to the lock file on the NAS
+LOCKFILE_PATH = os.path.dirname(os.environ.get('DATABASE_PATH', '/mnt/nas/soil_test_results.db')) + '/lockfile.lock'  # Path to the lock file on the NAS
 
 def acquire_lock(timeout=30, max_lock_age=300, check_interval=1):
     """Attempt to acquire a lock by creating a lockfile.
