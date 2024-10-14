@@ -13,9 +13,9 @@
 #   - For Linux/macOS:
 #       - Mounts the SMB/NAS share.
 #       - Sets DATABASE_PATH.
-#       - Sets up and activates a Python virtual environment.
-#       - Installs dependencies.
-#       - Runs the Flask application.
+#       - Checks Docker daemon.
+#       - Uses Docker Compose to build and run containers.
+#       - Monitors container health.
 #       - Opens the application in the default browser.
 # Usage: ./start.sh "[SMB_PATH]"
 #        - SMB_PATH: Optional argument to specify a custom SMB share path.
@@ -27,12 +27,22 @@
 # Description: Handles cleanup actions when the script is interrupted.
 # =============================================================================
 cleanup() {
-    echo -e "\nStopping Flask application..."
-    # Deactivate virtual environment if active
+    echo -e "\nStopping processes..."
+
+    # Deactivate virtual environment if active (Windows)
     if [[ "$VIRTUAL_ENV" != "" ]]; then
         deactivate
+        echo "Virtual environment deactivated."
     fi
-    echo "Flask application stopped."
+
+    # Stop Docker containers (Linux/macOS)
+    if [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "darwin"* ]]; then
+        echo "Stopping Docker containers..."
+        docker-compose down
+        echo "Docker containers stopped."
+    fi
+
+    echo "Cleanup completed."
     exit 0
 }
 
@@ -41,7 +51,7 @@ trap cleanup SIGINT
 
 # =============================================================================
 # Function: check_python
-# Description: Checks if Python is installed.
+# Description: Checks if Python is installed on Windows.
 # =============================================================================
 check_python() {
     python_version=$(powershell.exe -Command "python --version" 2>&1)
@@ -101,7 +111,7 @@ set_env_vars_windows() {
     powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('FLASK_APP', 'app.py', 'User')"
     powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('FLASK_ENV', 'development', 'User')"
     powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('FLASK_DEBUG', '1', 'User')"
-    powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('DATABASE_PATH', '$DATABASE_PATH', 'User')"
+    powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('DATABASE_PATH', 'Z:/soil_test_results.db', 'User')"
 }
 
 # =============================================================================
@@ -279,7 +289,6 @@ mount_windows() {
     NAS_MOUNT_PATH="${drive_letter}/"
 }
 
-
 # =============================================================================
 # Function: parse_smb_path
 # Description: Cleans the SMB path by removing the protocol prefix if present.
@@ -318,8 +327,8 @@ validate_env_vars() {
 # =============================================================================
 set_database_path() {
     if [[ "$OSTYPE" == "cygwin" || "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-        # Windows SMB path
-        export DATABASE_PATH="//drive.irds.uwa.edu.au/RES-ENG-CITS3200-P000735/soil_test_results.db"
+        # Windows SMB path using mapped drive
+        export DATABASE_PATH="Z:/soil_test_results.db"
     else
         # Non-Windows SMB path
         export DATABASE_PATH="$NAS_MOUNT_PATH/soil_test_results.db"
@@ -346,6 +355,59 @@ open_browser() {
         echo "Warning: OS not recognized. Please manually open the browser at http://127.0.0.1:5123"
         ;;
     esac
+}
+
+# =============================================================================
+# Function: check_docker_daemon
+# Description: Checks if the Docker daemon is running on Linux/macOS.
+# =============================================================================
+check_docker_daemon() {
+    if ! docker info >/dev/null 2>&1; then
+        echo "Error: Docker daemon is not running. Please start Docker and try again."
+        exit 1
+    fi
+}
+
+# =============================================================================
+# Function: start_docker
+# Description: Starts Docker Compose and waits for the container to become healthy.
+# =============================================================================
+start_docker() {
+    echo "Starting Docker containers..."
+    docker-compose up -d
+
+    echo "Waiting for the Docker container to become healthy..."
+    while true; do
+        sleep 5
+        # Fetch the health status of the container using service name
+        service_name="web"  # Ensure this matches your service name in docker-compose.yml
+        container_id=$(docker-compose ps -q "$service_name")
+
+        if [ -z "$container_id" ]; then
+            echo "Error: Service '$service_name' not found in docker-compose.yml."
+            exit 1
+        fi
+
+        container_status=$(docker inspect --format='{{.State.Health.Status}}' "$container_id" 2>/dev/null)
+
+        if [ "$container_status" = "healthy" ]; then
+            echo "Docker container is healthy and running."
+            break
+        elif [ "$container_status" = "unhealthy" ]; then
+            echo "Docker container is unhealthy. Check logs for details."
+            docker logs "$container_id"
+            exit 1
+        elif [ "$container_status" = "none" ]; then
+            # If no healthcheck is defined, consider it healthy once it's running
+            container_state=$(docker inspect --format='{{.State.Running}}' "$container_id" 2>/dev/null)
+            if [ "$container_state" = "true" ]; then
+                echo "Docker container is running."
+                break
+            fi
+        else
+            echo "Still waiting for container to become healthy..."
+        fi
+    done
 }
 
 # =============================================================================
@@ -410,72 +472,113 @@ set_database_path
 echo "DATABASE_PATH is set to: $DATABASE_PATH"
 
 # =============================================================================
-# Check if Python is Installed
+# Execute Based on OS
 # =============================================================================
-check_python
+if [[ "$OSTYPE" == "cygwin" || "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    # ============================
+    # Windows: Use Python Virtual Environment
+    # ============================
 
-# =============================================================================
-# Set Up Virtual Environment
-# =============================================================================
-setup_venv
+    # =============================================================================
+    # Check if Python is Installed
+    # =============================================================================
+    check_python
 
-# =============================================================================
-# Activate Virtual Environment
-# =============================================================================
-activate_venv
+    # =============================================================================
+    # Set Up Virtual Environment
+    # =============================================================================
+    setup_venv
 
-# =============================================================================
-# Run venvcheck.py
-# =============================================================================
-echo "Running venvcheck.py..."
-python venvcheck.py
-if [ $? -ne 0 ]; then
-    echo "Error: venvcheck.py failed."
+    # =============================================================================
+    # Activate Virtual Environment
+    # =============================================================================
+    activate_venv
+
+    # =============================================================================
+    # Run venvcheck.py
+    # =============================================================================
+    echo "Running venvcheck.py..."
+    python venvcheck.py
+    if [ $? -ne 0 ]; then
+        echo "Error: venvcheck.py failed."
+        exit 1
+    fi
+
+    # =============================================================================
+    # Set Environment Variables
+    # =============================================================================
+    set_env_vars
+
+    # =============================================================================
+    # Echo Environment Variables
+    # =============================================================================
+    echo "FLASK_APP: $FLASK_APP"
+    echo "FLASK_ENV: $FLASK_ENV"
+    echo "FLASK_DEBUG: $FLASK_DEBUG"
+    echo "DATABASE_PATH: $DATABASE_PATH"
+
+    # =============================================================================
+    # Install Python Dependencies
+    # =============================================================================
+    echo "Installing Python dependencies..."
+    pip install --no-cache-dir -r requirements.txt
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to install Python dependencies."
+        exit 1
+    fi
+
+    # =============================================================================
+    # Run Flask Application
+    # =============================================================================
+    echo "Starting Flask application..."
+    flask run --host=0.0.0.0 --port=5123 &
+    FLASK_PID=$!
+
+    # =============================================================================
+    # Wait for Flask to Start
+    # =============================================================================
+    sleep 60
+
+    # =============================================================================
+    # Open the Application in the Default Browser Based on OS
+    # =============================================================================
+    open_browser
+
+    # =============================================================================
+    # Keep the Script Running to Allow Cleanup on Ctrl+C
+    # =============================================================================
+    echo "Press Ctrl+C to stop the Flask application and exit."
+    wait $FLASK_PID
+
+elif [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "darwin"* ]]; then
+    # ============================
+    # Linux/macOS: Use Docker
+    # ============================
+
+    # =============================================================================
+    # Check if Docker Daemon is Running
+    # =============================================================================
+    check_docker_daemon
+
+    # =============================================================================
+    # Start Docker Compose and Wait for Container to Become Healthy
+    # =============================================================================
+    start_docker
+
+    # =============================================================================
+    # Open the Application in the Default Browser Based on OS
+    # =============================================================================
+    open_browser
+
+    # =============================================================================
+    # Keep the Script Running to Allow Cleanup on Ctrl+C
+    # =============================================================================
+    echo "Press Ctrl+C to stop the Docker containers and exit."
+    while :; do
+        sleep 1
+    done
+
+else
+    echo "Error: Unsupported OS type: $OSTYPE"
     exit 1
 fi
-
-# =============================================================================
-# Set Environment Variables
-# =============================================================================
-set_env_vars
-
-# =============================================================================
-# Echo Environment Variables
-# =============================================================================
-echo "FLASK_APP: $FLASK_APP"
-echo "FLASK_ENV: $FLASK_ENV"
-echo "FLASK_DEBUG: $FLASK_DEBUG"
-echo "DATABASE_PATH: $DATABASE_PATH"
-
-# =============================================================================
-# Install Python Dependencies
-# =============================================================================
-echo "Installing Python dependencies..."
-pip install --no-cache-dir -r requirements.txt
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to install Python dependencies."
-    exit 1
-fi
-
-# =============================================================================
-# Run Flask Application
-# =============================================================================
-echo "Starting Flask application..."
-flask run --host=0.0.0.0 --port=5123 &
-FLASK_PID=$!
-
-# =============================================================================
-# Wait for Flask to Start
-# =============================================================================
-sleep 60
-
-# =============================================================================
-# Open the Application in the Default Browser Based on OS
-# =============================================================================
-open_browser
-
-# =============================================================================
-# Keep the Script Running to Allow Cleanup on Ctrl+C
-# =============================================================================
-echo "Press Ctrl+C to stop the Flask application and exit."
-wait $FLASK_PID
