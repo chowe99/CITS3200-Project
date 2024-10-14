@@ -484,7 +484,7 @@ def plot():
                         "<extra></extra>"
                         )
                     ))
-                for y in selected_y_columns:
+                for y in np.unique(selected_y_columns):
                     fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
