@@ -320,8 +320,8 @@ def plot():
     logger.info("Lock acquired for plotting.")
     try:
         # Retrieve form data
-        x_axis = request.form.get('x_axis')
-        y_axis = request.form.getlist('y_axis')
+        x_axis = request.form.get('x_axis') if 'x_axis' in request.form else None
+        y_axis = request.form.getlist('y_axis') if 'y_axis' in request.form else []
         selected_tables = request.form.getlist('table_name[]')
         instances_json = request.form.get('instances_json')
         decrypt_password = request.form.get("decrypt_password")
@@ -337,6 +337,8 @@ def plot():
             if not y_axis:
                 logger.error("No Y-axis selected in plot request.")
                 return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
+        else:
+            pass
 
         logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
