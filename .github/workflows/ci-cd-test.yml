@@ -1,5 +1,3 @@
-# .github/workflows/ci-cd-test.yml
-
 name: CI/CD and Automated Testing
 
 on:
@@ -39,7 +37,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-buildx-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -54,45 +52,63 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir -r requirements.txt
-      # Step 5.1: Verify Pytest Installation
+
+      # Step 6: Verify Pytest Installation
       - name: Verify Pytest Installation
         run: |
           pytest --version
 
-      # Step 6: Install Google Chrome
+      # Step 7: Install Google Chrome
       - name: Install Google Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
-      # Step 7: Setup ChromeDriver using a Dedicated Action
-      - name: Install ChromeDriver
-        uses: actions/checkout@v2 
-      - uses: nanasess/setup-chromedriver@v2
-        # with:
-          # # Optional: do not specify to match Chrome's version
-          # chromedriver-version: '88.0.4324.96'
-      - run: |
-          export DISPLAY=:99
-          chromedriver --url-base=/wd/hub &
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
-      
-      # Step 8: Set NAS_MOUNT_PATH to Simulated Directory
-      - name: Configure NAS_MOUNT_PATH
+      # Step 8: Setup ChromeDriver
+      - name: Setup ChromeDriver
+        uses: actions/setup-chromedriver@v3
+        with:
+          chrome-version: 'latest'  # Optionally specify the Chrome version
+
+      # Step 9: Setup Display and Xvfb
+      - name: Setup Display and Xvfb
         run: |
-          if [ "$REAL_NAS" = "false" ]; then
-            echo "NAS_MOUNT_PATH=./tests/integration" >> $GITHUB_ENV
-            mkdir -p tests/integration
-            echo "Simulating NAS by using tests/integration directory."
-            # Ensure the simulated directory exists and contains necessary files
-          fi
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1280x1024x24 &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+
+      # Step 10: Set Up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Step 11: Cache Docker layers
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      # Step 12: Build and Push Docker Image with Buildx and Caching
+      - name: Build and Push Docker Image
+        run: |
+          docker buildx build \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache-new \
+            -t cits3200-project-web:latest \
+            -f Dockerfile .
           
-      # Step 9: Start Docker Compose Services
+          # Move the new cache
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      # Step 13: Start Docker Compose Services
       - name: Start Docker Compose Services
         run: |
           docker compose up -d
 
-      # Step 10: Wait for Flask App to be Healthy
+      # Step 14: Wait for Flask App to be Healthy
       - name: Wait for Flask App to be Healthy
         run: |
           for i in {1..30}; do
@@ -104,18 +120,40 @@ jobs:
             sleep 2
           done
 
-      # Step 11: Run End-to-End Tests
+      # Step 15: Verify Flask App Accessibility
+      - name: Verify Flask App Accessibility
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5123/)
+          if [ "$response" -eq 200 ]; then
+            echo "Flask app is accessible and returned status 200."
+          else
+            echo "Flask app is not accessible. Status code: $response"
+            exit 1
+          fi
+
+      # Step 16: List Running Docker Containers
+      - name: List Running Docker Containers
+        run: docker ps -a
+
+      # Step 17: Run End-to-End Tests
       - name: Run End-to-End Tests
         env:
           TEST_ENCRYPT_PASSWORD: ${{ secrets.TEST_ENCRYPT_PASSWORD }}  # Securely inject secret
+          BASE_URL: ${{ env.BASE_URL }}
         run: |
-          # Dynamically replace the spreadsheet path in the test script
-          sed -i "s|./tests/e2e/test_spreadsheet_sample.xlsx|./tests/e2e/test_spreadsheet.xlsx|" tests/e2e/test_user_flow.py
- 
-          # Run pytest
-          pytest tests/e2e/test_user_flow.py
+          # Run pytest with verbose output
+          pytest -v tests/e2e/test_user_flow.py
 
-      # Step 12: Shutdown Docker Compose Services
+      # Step 18: Upload Test Failure Screenshots
+      - name: Upload Test Failure Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-screenshots
+          path: screenshots/
+
+      # Step 19: Shutdown Docker Compose Services
       - name: Shutdown Docker Compose Services
         run: |
           docker compose down
+
