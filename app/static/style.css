@@ -1,5 +1,3 @@
-/* style.css */
-
 /* Basic page styling */
 body {
     font-family: Arial, sans-serif;
@@ -11,79 +9,63 @@ body {
 
 /* Header styling */
 h1 {
-    text-align: center;
+    text-align: left;
     color: #4a90e2;
+}
+
+h2, h3, label {
+    font-size: 16px; /* Adjust the size as needed */
+}
+
+label {
+    font-weight: bold; /* Make labels bold */
+}
+
+/* Main container layout */
+.main_container {
+    display: flex;
+    flex-direction: column; /* Change to column direction */
+    align-items: flex-start; /* Align items to the left */
+    width: 100%;
+}
+
+/* Plot container styles */
+#plot-container {
+    flex: 1;
+    transition: all 0.3s ease; /* Smooth transition */
+    max-width: 900px;
+    height: 600px;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+/* Form container styles */
+.container_one {
+    flex: 0 0 400px; /* Fixed width for right container */
+    background-color: #fff;
+    padding: 20px;
+    margin: 20px 0; /* Margin around the form */
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+
+#plot-container.fullscreen {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10; /* Ensure the button is on top */
 }
 
 /* Form styling */
 form {
     display: flex;
     flex-direction: column;
-    align-items: center;
     margin: 20px 0;
-    padding: 20px;
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-/* Form elements styling */
-input[type="checkbox"] {
-    margin-right: 10px;
-}
-
-select {
-    padding: 5px;
-    margin: 10px 0;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-/* Button styling */
-button {
-    padding: 10px 20px;
-    background-color: #4a90e2;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-button:hover {
-    background-color: #357ab7;
-}
-
-/* Plot image container */
-div img {
-    display: block;
-    margin: 20px auto;
-    max-width: 100%;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-}
-
-.value-checklist {
-    margin-left: 20px; 
-    padding: 5px;     
-    border-top: 1px solid #f4f4f9;
-    background-color: #4a90e2; 
-}
-
-/* style.css */
-
-/* Existing styles... */
-
-#plot-container {
-    width: 100%;
-    max-width: 1000px; /* Adjust as needed */
-    height: 600px;     /* Set the desired height */
-    margin: 0 auto;    /* Center the container horizontally */
-    padding: 10px;     /* Optional: Add some padding */
-    box-sizing: border-box; /* Include padding in the element's total width and height */
-}
-
+/* Flash messages */
 .flashes {
     list-style-type: none;
     padding: 0;
@@ -98,3 +80,97 @@ div img {
     border-radius: 4px;
 }
 
+/* Button styling */
+button[type="submit"] {
+    background-color: #ffffff; /* Example background color */
+    color: rgb(0, 0, 0); /* Text color */
+    padding: 10px 20px; /* Padding */
+    border: 1px solid #ddd;
+    border-radius: 5px; /* Rounded corners */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: background-color 0.3s; /* Smooth transition */
+    width: 200px;
+}
+
+button[type="submit"]:hover {
+    background-color: #f0f0f0; /* Change color on hover */
+}
+
+/* Custom select styling */
+.custom-select {
+    min-width: 350px;
+}
+
+.custom-select select {
+    appearance: none;
+    width: 100%; /* Use 100% for responsiveness */
+    padding: 10px 20px;
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 0.25rem;
+    color: #000000;
+    cursor: pointer;
+}
+
+/* Drag selection styles */
+.checkbox-group {
+    position: relative;
+}
+
+.checkbox-group .checkbox-container:hover {
+    background-color: #f1f1f1; /* Highlight on hover */
+}
+
+/* Dropdown styles */
+.dropdown {
+    position: relative;
+    display: inline-block;
+    width: 100%; /* Use 100% for responsiveness */
+    margin: 10px 0;
+}
+
+.dropdown button {
+    width: 100%; /* Full width */
+    padding: 10px;
+    background-color: #ffffff;
+    color: rgb(0, 0, 0);
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.dropdown button:hover {
+    background-color: #f0f0f0; /* Change color on hover */
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: white;
+    min-width: 200px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    z-index: 1;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Individual checkbox label styling in dropdown */
+.dropdown-content label {
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    display: block;
+}
+
+.dropdown-content label:hover {
+    background-color: #f1f1f1; /* Change background on hover */
+}
+
+/* Show dropdown content */
+.show {
+    display: block;
+}

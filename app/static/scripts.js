@@ -1,3 +1,107 @@
+let isDragging = false;
+let checkboxes = [];
+
+function toggleDropdown(dropdownId) {
+    document.getElementById(dropdownId).classList.toggle("show");
+}
+
+window.onclick = function(event) {
+    if (!event.target.matches('.dropdown button')) {
+        var dropdowns = document.getElementsByClassName("dropdown-content");
+        for (var i = 0; i < dropdowns.length; i++) {
+            var openDropdown = dropdowns[i];
+            if (openDropdown.classList.contains('show')) {
+                openDropdown.classList.remove('show');
+            }
+        }
+    }
+}
+
+function toggleFullScreen() {
+    const plotContainer = document.getElementById('plot-container');
+    plotContainer.classList.toggle('fullscreen');
+}
+
+function toggleCheckbox(event) {
+    const checkbox = event.target;
+    checkbox.checked = !checkbox.checked;
+}
+
+function startDrag(event) {
+    event.preventDefault();
+    isDragging = true;
+
+    // Store checkboxes
+    checkboxes = Array.from(document.querySelectorAll('.checkbox-group input[type="checkbox"]'));
+
+    // Add event listeners for mousemove and mouseup
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', endDrag);
+}
+
+function drag(event) {
+    if (!isDragging) return;
+
+    // Calculate which checkboxes to select
+    checkboxes.forEach(checkbox => {
+        const box = checkbox.getBoundingClientRect();
+        const isWithin = (
+            event.clientX >= box.left &&
+            event.clientX <= box.right &&
+            event.clientY >= box.top &&
+            event.clientY <= box.bottom
+        );
+        checkbox.checked = isWithin;
+    });
+}
+
+function endDrag() {
+    isDragging = false;
+    document.removeEventListener('mousemove', drag);
+    document.removeEventListener('mouseup', endDrag);
+}
+
+// Optional: Click event to ensure drag selection works even when clicking directly on checkboxes
+document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(checkbox => {
+    checkbox.addEventListener('mousedown', function(event) {
+        if (isDragging) {
+            event.preventDefault(); // Prevent checkbox toggle
+        }
+    });
+});
+
+
+
+
+
+// Function to toggle full screen for the plot container
+function toggleFullScreen() {
+    const plotContainer = document.getElementById('plot-container');
+
+    if (!document.fullscreenElement) {
+        // If not in full screen, request to enter full screen
+        plotContainer.requestFullscreen().catch(err => {
+            console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+        });
+    } else {
+        // If already in full screen, exit full screen
+        document.exitFullscreen();
+    }
+}
+
+// Function to handle resizing of the plot
+function resizePlot() {
+    const plotContainer = document.getElementById('plot-container');
+    Plotly.Plots.resize(plotContainer);
+}
+
+// Listen for fullscreen change event
+document.addEventListener('fullscreenchange', resizePlot);
+document.addEventListener('webkitfullscreenchange', resizePlot);
+document.addEventListener('mozfullscreenchange', resizePlot);
+document.addEventListener('MSFullscreenChange', resizePlot);
+
+
 // Function to show messages
 async function showMessage(message, isSuccess, elementId) {
   const messageArea = document.getElementById(elementId);

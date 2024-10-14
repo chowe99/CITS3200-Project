@@ -1,152 +1,148 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Query and Plot</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  </head>
-  <body>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> <!-- Ensure this path is correct -->
+</head>
+<body>
     <div id="message-area"></div>
     {% with messages = get_flashed_messages() %}
     {% if messages %}
     <ul class="flashes">
-      {% for message in messages %}
-      <li>{{ message }}</li>
-      {% endfor %}
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
     </ul>
     {% endif %}
     {% endwith %}
-    <h1>Soil Database Tool</h1>
+    
+    <div class="main_container"> <!-- Ensure CSS targets this class -->
+        <h1>Soil Database Tool</h1>
+        <div class="container_one"> <!-- Ensure CSS targets this class -->
+            <form id="upload-form" method="post" enctype="multipart/form-data" action="/upload">
+                <label for="excel-file">Select Excel Files:</label>
+                <input type="file" id="excel-file" name="excel_files" accept=".xlsx" multiple required><br><br>
 
-    <h2>Upload Excel File</h2>
-    <form id="upload-form" method="post" enctype="multipart/form-data" action="/upload">
-      <label for="excel-file">Select Excel Files:</label>
-      <input type="file" id="excel-file" name="excel_files" accept=".xlsx" multiple required><br><br>
-
-      <label for="password">Encryption Password (optional):</label>
-      <input type="password" id="encrypt_password" name="encrypt_password" placeholder="Enter password to encrypt data"><br><br>
+                <label for="password">Encryption Password (optional):</label>
+                <input type="password" id="encrypt_password" name="encrypt_password" placeholder="Enter password to encrypt data"><br><br>
 
       <button type="submit">Upload and Process</button>
       <div id="upload-progress-bar"></div>
     </form>
 
-    <form id="filter-form">
-<!-- Spreadsheets selection -->
-<div id="spreadsheet-selection">
-  <label>Select table(s):</label>
-  <h2>Select Table(s)</h2> <!-- Changed to a title -->
-
-  
-  <!-- Non-encrypted tables -->
-  <div id="non-encrypted-tables">
-    <h3>Non-encrypted Tables:</h3>
-    <div id="table-checkboxes">
-      {% for table in tables %}
-        {% if not table.encrypted %}
+            <form id="filter-form">
+                <!-- Spreadsheets selection -->
+                <div id="spreadsheet-selection">
+                    <h2>Select Table(s)</h2>
+                    
+                    <div id="non-encrypted-tables">
+                      <h3>Non-encrypted Tables:</h3>
+                      <div class="dropdown">
+                          <button type="button" onclick="toggleDropdown('nonEncryptedDropdown')">Select Tables</button>
+                          <div id="nonEncryptedDropdown" class="dropdown-content">
+                              {% for table in tables %}
+                                  {% if not table.encrypted %}
+                                  <label>
+                                      <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> {{ table.spreadsheet_name }}
+                                  </label>
+                                  {% endif %}
+                              {% endfor %}
+                          </div>
+                      </div>
+                  </div>
+                  
+        
+                  <div id="encrypted-tables">
+                    <h3>Encrypted Tables:</h3>
+                    <div class="dropdown">
+                        <button type="button" onclick="toggleDropdown('encryptedDropdown')">Select Encrypted Tables</button>
+                        <div id="encryptedDropdown" class="dropdown-content">
+                            {% for table in tables %}
+                                {% if table.encrypted %}
+                                <label>
+                                    <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> {{ table.spreadsheet_name }}
+                                    <span> (Password Required)</span>
+                                    <input type="password" id="password_{{ table.spreadsheet_name }}" name="password_{{ table.spreadsheet_name }}" placeholder="Password" style="display: none;">
+                                </label>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+        
+                <!-- Instances selection -->
+                <div id="instance-selection">
+                    <label for="instance-select">Select instance(s):</label>
+                    {% for key, values in instances.items() %}
+                    <div>
+                        <input type="checkbox" id="{{ key }}" name="instance_names" value="{{ key }}" onclick="toggleValueChecklist(this)">
+                        <label for="{{ key }}">{{ key }}</label>
+                        <div class="value-checklist" style="display: none;">
+                            {% for value in values %}
+                            <input type="checkbox" id="{{ key }}_{{ value }}" name="{{ key }}_values" value="{{ value }}">
+                            <label for="{{ key }}_{{ value }}">{{ value }}</label><br>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+        
+                <!-- Preset plot options -->
+                <div>
+                    <h3>Preset Plot Options:</h3>
+                    <select name="preset-options">
+                        <option value="None">None</option>
+                        <option value="non_calc_1">p', q, induced PWP vs axial strain</option>
+                        <option value="non_calc_2">q vs p'</option>
+                        <option value="non_calc_3">Vol strain vs axial strain</option>
+                        <option value="calc_1">e vs log(p')</option>
+                        <option value="calc_2">q/p' vs axial strain</option>
+                        <option value="calc_3">qmax/p' vs p'</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <h3>Select X-Axis:</h3>
+                    <select name="x_axis">
+                        {% for column in x_axis_options %}
+                        <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
+                        {% endfor %}
+                    </select>
+                    <p>X-axis is only added if preset plot options is set to 'None'</p>
+                </div>
+        
+                <!-- Y-Axis selection -->
+                <div>
+                    <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
+                    <div id="y-axis-container">
+                        {% for column in y_axis_options %}
+                        <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
+                        {% endfor %}
+                    </div>
+                    <p>Y-axes can be added to preset plot options.</p>
+                </div>
+        
+                <!-- Decryption password -->
+                <label for="decrypt_password">Decryption Password:</label>
+                <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
+        
+                <button type="submit">Generate Plot</button>
+            </form>
+        </div>
         <div>
-          <!-- Checkbox for table selection -->
-          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> 
-          {{ table.spreadsheet_name }}<br>
+            <button id="fullscreen-button" onclick="toggleFullScreen()">Full Screen</button>
         </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  </div>
-
-  <!-- Encrypted tables -->
-  <div id="encrypted-tables">
-    <h3>Encrypted Tables:</h3>
-    <div id="table-checkboxes">
-      {% for table in tables %}
-        {% if table.encrypted %}
-        <div>
-          <!-- Checkbox for table selection -->
-          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> 
-          {{ table.spreadsheet_name }}<br>
-        </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  </div>
-</div>
-
-
-
-      <!-- Instances selection -->
-      <div id="instance-selection">
-        <label for="instance-select">Select instance(s):</label>
-        {% for key, values in instances.items() %}
-        <div>
-          <input type="checkbox" id="{{ key }}" name="instance_names" value="{{ key }}" onclick="toggleValueChecklist(this)">
-          <label for="{{ key }}">{{ key }}</label>
-          <div class="value-checklist" style="display: none;">
-            {% for value in values %}
-            <input type="checkbox" id="{{ key }}_{{ value }}" name="{{ key }}_values" value="{{ value }}">
-            <label for="{{ key }}_{{ value }}">{{ value }}</label><br>
-            {% endfor %}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- X-Axis selection -->
-      <div>
-        <h3>Preset plot options:</h3>
-        <select name="preset-options">
-          <option value="None">None</option>
-          <option value="non_calc_1">p', q, induced PWP vs axial strain </option>
-          <option value="non_calc_2">q vs p'</option>
-          <option value="non_calc_3">Vol strain vs axial strain</option>
-          <option value="calc_1">e vs log(p')</option>
-          <option value="calc_2">q/p' vs axial strain</option>
-          <option value="calc_3">qmax/p' vs p'</option>
-        </select>
-      </div>
-      
-      <div>
-        <h3>Select X-Axis:</h3>
-        <select name="x_axis">
-          {% for column in x_axis_options %}
-          <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
-          {% endfor %}
-        </select>
-        <p>X-axis is only added if preset plot options is set at 'None'</p>
-      </div>
-
-      <!-- Y-Axis selection -->
-      <div>
-        <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
-        <div id="y-axis-container">
-          {% for column in y_axis_options %}
-          {% if column == 'p' %}
-          <input type="checkbox" name="y_axis" value="{{ column }}"> p'<br>
-          {% else %}
-          <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
-          {% endif %}
-          {% endfor %}
-        </div>
-        <p>Y-axes can be added to preset plots options.</p>
-      </div>
-
-      <!-- Decryption password -->
-      <label for="decrypt_password">Decryption Password:</label>
-      <input type="password" id="decrypt_password" name="decrypt_password"><br><br>
-
-      <button type="submit">Generate Plot</button>
-    </form>
-
-    <!-- Container to display the plot -->
-    <h2>Generated Plot:</h2>
-    <div id="plot-container">
+        <!-- Container to display the plot -->
+        <div id="plot-container"></div>
     </div>
 
     <!-- Link to external JavaScript file -->
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>
     <!-- Include Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
-  </body>
+</body>
 </html>
-
