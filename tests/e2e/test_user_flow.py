@@ -53,7 +53,7 @@ def test_upload_and_plot(browser):
     y_axis.send_keys("shear_induced_pwp")
 
     # Apply instance filters
-    drainage_filter = browser.find_element(By.ID, "drained")
+    drainage_filter = browser.find_element(By.ID, "Drainage_drained")
     drainage_filter.click()
 
     # Submit the plot form
