@@ -107,3 +107,49 @@ def test_upload_and_plot(browser):
         browser.save_screenshot("screenshots/test_failure.png")
         raise e
 
+
+def test_select_non_encrypted_table_and_generate_plot(browser):
+    try:
+        # Retrieve the base URL from environment variables, default to localhost
+        base_url = os.getenv("BASE_URL", "http://localhost:5123")
+        browser.get(base_url)
+
+        # Wait for the non-encrypted tables to be visible
+        non_encrypted_tables = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.ID, "non-encrypted-tables"))
+        )
+
+        # Select the first non-encrypted table from the checkbox list
+        first_table_checkbox = non_encrypted_tables.find_element(By.XPATH, "//input[@type='checkbox'][1]")
+        first_table_checkbox.click()
+        print("Selected the first non-encrypted table.")
+
+        # Wait for the preset options dropdown to be visible
+        preset_dropdown = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.NAME, "preset-options"))
+        )
+
+        # Select a preset option, e.g., "Vol strain vs axial strain"
+        preset_dropdown.send_keys("Vol strain vs axial strain")
+        print("Selected 'Vol strain vs axial strain' preset option.")
+
+        # Press the "Generate Plot" button
+        generate_button = browser.find_element(By.XPATH, "//button[text()='Generate Plot']")
+        generate_button.click()
+        print("Clicked 'Generate Plot' button.")
+
+        # Wait for plot generation
+        WebDriverWait(browser, 30).until(
+            EC.presence_of_element_located((By.ID, "plot-container"))
+        )
+
+        # Validate that the plot was generated successfully
+        plot_container = browser.find_element(By.ID, "plot-container")
+        assert plot_container is not None
+        print("Plot generated successfully.")
+
+    except Exception as e:
+        print(f"An exception occurred: {e}")
+        # Take a screenshot for debugging purposes
+        browser.save_screenshot("screenshots/test_failure.png")
+        raise e
