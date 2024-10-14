@@ -490,7 +490,7 @@ def plot():
                         "<extra></extra>"
                         )
                     ))
-                for y in selected_y_columns:
+                for y in np.unique(selected_y_columns):
                     fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y],
@@ -507,7 +507,8 @@ def plot():
                     ))   
             y_axis = [y_preset] + selected_y_columns # Combining calculated column name and selected columns names
             logger.debug(f"Added plot trace for '{table_name} - {y}'.")        
-        else:    
+        else:   
+            y_axis = np.unique(y_axis) 
             for y in y_axis:
                 for table_name in data['source'].unique():
                     table_data = data[data['source'] == table_name]
@@ -526,7 +527,7 @@ def plot():
                         )
                     ))
         
-        y_axis = ["p'" if y == 'p' else y for y in y_axis] #Add apostrophe to p
+        y_axis = np.unique(["p'" if y == 'p' else y for y in y_axis]) #Add apostrophe to p
         if x_axis == 'p':
             x_axis = "p'"
 
