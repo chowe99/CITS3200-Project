@@ -17,6 +17,7 @@ env:
   NAS_MOUNT_PATH: "./tests/integration"  # Default to simulated directory
   SMB_USERNAME: ""  # Set to empty as REAL_NAS is false
   SMB_PASSWORD: ""  # Set to empty as REAL_NAS is false
+  BASE_URL: "http://localhost:5123"  # Base URL for the Flask app
 
 jobs:
   build-and-test:
@@ -117,4 +118,4 @@ jobs:
       # Step 12: Shutdown Docker Compose Services
       - name: Shutdown Docker Compose Services
         run: |
-          docker-compose down
+          docker compose down
