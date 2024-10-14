@@ -133,12 +133,22 @@ def test_upload_and_plot_with_preset_option(browser):
         )
         print("Non-encrypted tables section is visible.")
 
+        # DEBUG: Print the contents of the non-encrypted tables section
+        non_encrypted_tables_section = browser.find_element(By.ID, "non-encrypted-tables")
+        print(f"Non-encrypted tables section HTML: {non_encrypted_tables_section.get_attribute('innerHTML')}")
+
         # Step 4: Select the uploaded spreadsheet from the non-encrypted tables section
-        table_checkbox = WebDriverWait(browser, 20).until(
-            EC.presence_of_element_located((By.XPATH, "//input[@name='table_name[]'][@value='test_1.xlsx']"))
-        )
-        table_checkbox.click()
-        print("Selected the uploaded spreadsheet (test_1.xlsx) from the non-encrypted tables.")
+        try:
+            table_checkbox = WebDriverWait(browser, 20).until(
+                EC.presence_of_element_located((By.XPATH, "//input[@name='table_name[]'][@value='test_1.xlsx']"))
+            )
+            table_checkbox.click()
+            print("Selected the uploaded spreadsheet (test_1.xlsx) from the non-encrypted tables.")
+        except TimeoutException:
+            print("Failed to find the checkbox for test_1.xlsx.")
+            # Take a screenshot for debugging purposes
+            browser.save_screenshot("screenshots/checkbox_not_found.png")
+            pytest.fail("Checkbox for test_1.xlsx not found in non-encrypted tables section.")
 
         # Step 5: Select preset plot option
         preset_dropdown = WebDriverWait(browser, 10).until(
