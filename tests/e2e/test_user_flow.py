@@ -108,80 +108,61 @@ def test_upload_and_plot(browser):
         raise e
 
 
-def test_add_multiple_spreadsheets_and_generate_plot(browser):
+def test_upload_and_plot_with_preset_option(browser):
     try:
         # Retrieve the base URL from environment variables, default to localhost
         base_url = os.getenv("BASE_URL", "http://localhost:5123")
         browser.get(base_url)
 
-        # Step 1: Upload the first spreadsheet (test_1.xlsx)
-        upload_button = WebDriverWait(browser, 10).until(
-            EC.element_to_be_clickable((By.ID, "add-spreadsheet-button"))
+        # Step 1: Upload the spreadsheet (test_1.xlsx)
+        upload_input = WebDriverWait(browser, 10).until(
+            EC.presence_of_element_located((By.ID, "excel-file"))
         )
+        file_path = os.path.abspath("./tests/e2e/test_1.xlsx")
+        print(f"Uploading file from path: {file_path}")  # Debugging line
+        upload_input.send_keys(file_path)
+
+        # Step 2: Submit the upload form
+        upload_button = browser.find_element(By.XPATH, "//button[text()='Upload and Process']")
         upload_button.click()
-        print("Clicked to add the first spreadsheet.")
+        print("Uploaded test_1.xlsx and clicked 'Upload and Process' button.")
 
-        upload_input = WebDriverWait(browser, 10).until(
-            EC.presence_of_element_located((By.ID, "spreadsheet-upload-input"))
+        # Step 3: Wait for the table to appear in the non-encrypted section
+        WebDriverWait(browser, 30).until(
+            EC.presence_of_element_located((By.ID, "non-encrypted-tables"))
         )
-        file_path_1 = os.path.abspath("./tests/e2e/test_1.xlsx")
-        upload_input.send_keys(file_path_1)
-        print(f"Uploaded first spreadsheet from path: {file_path_1}")
+        print("Non-encrypted tables section is visible.")
 
-        submit_upload_button = browser.find_element(By.ID, "submit-upload")
-        submit_upload_button.click()
-        print("Submitted the first spreadsheet upload form.")
-
-        # Step 2: Upload the second spreadsheet (test_2.xlsx)
-        upload_button.click()  # Click to add the second spreadsheet
-        print("Clicked to add the second spreadsheet.")
-
-        upload_input = WebDriverWait(browser, 10).until(
-            EC.presence_of_element_located((By.ID, "spreadsheet-upload-input"))
+        # Step 4: Select the uploaded spreadsheet from the non-encrypted tables section
+        table_checkbox = WebDriverWait(browser, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//input[@name='table_name[]'][@value='test_1.xlsx']"))
         )
-        file_path_2 = os.path.abspath("./tests/e2e/test_2.xlsx")
-        upload_input.send_keys(file_path_2)
-        print(f"Uploaded second spreadsheet from path: {file_path_2}")
+        table_checkbox.click()
+        print("Selected the uploaded spreadsheet (test_1.xlsx) from the non-encrypted tables.")
 
-        submit_upload_button.click()  # Submit the upload form for the second spreadsheet
-        print("Submitted the second spreadsheet upload form.")
-
-        # Step 3: Wait for both spreadsheets to appear in the list and select them
-        added_table_checkbox_1 = WebDriverWait(browser, 20).until(
-            EC.presence_of_element_located((By.XPATH, "//input[@type='checkbox'][@value='test_1.xlsx']"))
-        )
-        added_table_checkbox_1.click()
-        print("Selected the first spreadsheet (test_1.xlsx).")
-
-        added_table_checkbox_2 = WebDriverWait(browser, 20).until(
-            EC.presence_of_element_located((By.XPATH, "//input[@type='checkbox'][@value='test_2.xlsx']"))
-        )
-        added_table_checkbox_2.click()
-        print("Selected the second spreadsheet (test_2.xlsx).")
-
-        # Step 4: Select preset plot option
+        # Step 5: Select preset plot option
         preset_dropdown = WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.NAME, "preset-options"))
         )
         preset_dropdown.send_keys("Vol strain vs axial strain")
         print("Selected 'Vol strain vs axial strain' preset option.")
 
-        # Step 5: Press the "Generate Plot" button
+        # Step 6: Press the "Generate Plot" button
         generate_button = browser.find_element(By.XPATH, "//button[text()='Generate Plot']")
         generate_button.click()
         print("Clicked 'Generate Plot' button.")
 
-        # Step 6: Wait for plot generation
+        # Step 7: Wait for plot generation
         WebDriverWait(browser, 30).until(
             EC.presence_of_element_located((By.ID, "plot-container"))
         )
 
-        # Validate the plot
+        # Step 8: Validate the plot
         plot_container = browser.find_element(By.ID, "plot-container")
         assert plot_container is not None
         print("Plot generated successfully.")
 
-        # Step 7: Take a screenshot on success
+        # Step 9: Take a screenshot on success
         browser.save_screenshot("screenshots/success_plot_generated.png")
         print("Screenshot taken and saved at 'screenshots/success_plot_generated.png'.")
 
