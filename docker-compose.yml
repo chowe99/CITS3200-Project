@@ -15,7 +15,7 @@ services:
       DATABASE_PATH: /mnt/irds/soil_test_results.db
       SMB_USERNAME: "${SMB_USERNAME}"
       SMB_PASSWORD: "${SMB_PASSWORD}"
-      REAL_NAS: "${REAL_NAS}"
+      REAL_NAS: "${REAL_NAS:-true}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5123"]
       interval: 5s
