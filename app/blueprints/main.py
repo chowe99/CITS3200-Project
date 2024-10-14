@@ -501,7 +501,8 @@ def plot():
                     ))   
             y_axis = [y_preset] + selected_y_columns # Combining calculated column name and selected columns names
             logger.debug(f"Added plot trace for '{table_name} - {y}'.")        
-        else:    
+        else:   
+            y_axis = np.unique(y_axis) 
             for y in y_axis:
                 for table_name in data['source'].unique():
                     table_data = data[data['source'] == table_name]
