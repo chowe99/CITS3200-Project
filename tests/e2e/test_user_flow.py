@@ -140,7 +140,7 @@ def test_upload_and_plot_with_preset_option(browser):
         # Step 4: Select the uploaded spreadsheet from the non-encrypted tables section
         try:
             table_checkbox = WebDriverWait(browser, 20).until(
-                EC.presence_of_element_located((By.XPATH, "//input[@name='table_name[]'][@value='test_1.xlsx']"))
+                EC.presence_of_element_located((By.XPATH, "//input[@name='table_name[]'][@value='test_1']"))
             )
             table_checkbox.click()
             print("Selected the uploaded spreadsheet (test_1.xlsx) from the non-encrypted tables.")
