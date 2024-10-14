@@ -34,11 +34,13 @@ import numpy as np
 from sqlalchemy import and_, or_
 
 
-LOCKFILE_PATH = '/mnt/irds/lockfile.lock'  # Path to the lock file on the NAS
+# Set LOCKFILE_PATH from environment variable with a default value
+LOCKFILE_PATH = os.getenv('LOCKFILE_PATH', '/mnt/irds/lock.lock')  
 
 def acquire_lock(timeout=30, max_lock_age=300, check_interval=1):
     """Attempt to acquire a lock by creating a lockfile.
        If the lockfile is older than max_lock_age seconds, override it."""
+    os.makedirs(os.path.dirname(LOCKFILE_PATH), exist_ok=True)  # Ensure directory exists
     start_time = time.time()
     while True:
         try:
@@ -64,6 +66,12 @@ def acquire_lock(timeout=30, max_lock_age=300, check_interval=1):
                 if time.time() - start_time > timeout:
                     return False
                 time.sleep(check_interval)
+        except PermissionError as e:
+            logger.error(f"Permission denied while acquiring lock: {e}")
+            raise  # Re-raise the exception for higher-level handling
+        except Exception as e:
+            logger.exception(f"Unexpected error while acquiring lock: {e}")
+            raise  # Re-raise the exception for higher-level handling
 
 def release_lock():
     """Release the lock by deleting the lockfile."""
