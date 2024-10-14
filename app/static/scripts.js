@@ -229,15 +229,30 @@ document
         body: formData,
       });
       const data = await response.json();
+
+      // Clear all three divs before proceeding
+      document.getElementById("file-passing").innerHTML = "";       // Clear file passing messages
+      
       console.log("Response from /plot:", data);
       if (data.graph_json) {
         const plotData = JSON.parse(data.graph_json);
         Plotly.react("plot-container", plotData.data, plotData.layout);
+
+        // Display all messages as plain text
+        const messageArea = document.getElementById("file-passing");
+        data.plot_messages.forEach(message => {
+            const messageNode = document.createElement("p");
+            messageNode.textContent = message;
+            messageArea.appendChild(messageNode);  // Add each message as a paragraph
+        });
+
+
         await showMessage(
-          "Plot generated successfully.",
+          message,
           true,
           "plot-message-area",
         );
+
       } else if (data.error) {
         await showMessage(data.error, false, "plot-message-area");
       } else {
@@ -247,6 +262,7 @@ document
           "plot-message-area",
         );
       }
+      
     } catch (error) {
       console.error("Error:", error);
       await showMessage(

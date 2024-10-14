@@ -9,3 +9,5 @@ pysqlcipher3
 cryptography
 pytest
 selenium
+numpy
+

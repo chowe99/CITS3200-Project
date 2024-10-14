@@ -62,7 +62,6 @@ def insert_data_to_db(name, df, spreadsheet=None, encrypt=False, encryption_key=
                     **data
                 )
                 rows.append(row_entry)
-                logger.debug(f"Prepared row for Spreadsheet '{name}': {data}")
 
             db.session.bulk_save_objects(rows)
             logger.info(f"Bulk saved {len(rows)} rows for Spreadsheet '{name}'.")
