@@ -246,6 +246,7 @@ document
             messageArea.appendChild(messageNode);  // Add each message as a paragraph
         });
 
+
         await showMessage(
           message,
           true,
