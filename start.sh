@@ -38,7 +38,7 @@ cleanup() {
     # Stop Docker containers (Linux/macOS)
     if [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "darwin"* ]]; then
         echo "Stopping Docker containers..."
-        docker-compose down
+        docker compose down
         echo "Docker containers stopped."
     fi
 
@@ -111,7 +111,7 @@ set_env_vars_windows() {
     powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('FLASK_APP', 'app.py', 'User')"
     powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('FLASK_ENV', 'development', 'User')"
     powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('FLASK_DEBUG', '1', 'User')"
-    powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('DATABASE_PATH', 'Z:/soil_test_results.db', 'User')"
+    powershell.exe -Command "[System.Environment]::SetEnvironmentVariable('DATABASE_PATH', 'Z:/soil_tests.db', 'User')"
 }
 
 # =============================================================================
@@ -124,6 +124,7 @@ set_env_vars_unix() {
     export FLASK_ENV=development
     export FLASK_DEBUG=1
     export DATABASE_PATH="$DATABASE_PATH"
+
 }
 
 # =============================================================================
@@ -323,18 +324,19 @@ validate_env_vars() {
 
 # =============================================================================
 # Function: set_database_path
-# Description: Sets the DATABASE_PATH environment variable based on OS.
+# Description: Sets the DATABASE_PATH and LOCKFILE_PATH environment variables based on OS.
 # =============================================================================
 set_database_path() {
     if [[ "$OSTYPE" == "cygwin" || "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
         # Windows SMB path using mapped drive
-        export DATABASE_PATH="Z:/soil_test_results.db"
+        export DATABASE_PATH="\\\\drive.irds.uwa.edu.au\\RES-ENG-CITS3200-P000735\\soil_tests.db"
+        export LOCKFILE_PATH="Z:/lock.lock"  # Set LOCKFILE_PATH for Windows
     else
         # Non-Windows SMB path
-        export DATABASE_PATH="$NAS_MOUNT_PATH/soil_test_results.db"
+        export DATABASE_PATH="$NAS_MOUNT_PATH/soil_tests.db"
+        export LOCKFILE_PATH="$NAS_MOUNT_PATH/lock.lock"  
     fi
 }
-
 # =============================================================================
 # Function: open_browser
 # Description: Opens the application in the default browser based on OS.
@@ -374,14 +376,14 @@ check_docker_daemon() {
 # =============================================================================
 start_docker() {
     echo "Starting Docker containers..."
-    docker-compose up -d
+    docker compose up -d
 
     echo "Waiting for the Docker container to become healthy..."
     while true; do
         sleep 5
         # Fetch the health status of the container using service name
         service_name="web"  # Ensure this matches your service name in docker-compose.yml
-        container_id=$(docker-compose ps -q "$service_name")
+        container_id=$(docker compose ps -q "$service_name")
 
         if [ -z "$container_id" ]; then
             echo "Error: Service '$service_name' not found in docker-compose.yml."
@@ -471,6 +473,16 @@ echo "NAS_MOUNT_PATH is set to: $NAS_MOUNT_PATH"
 set_database_path
 echo "DATABASE_PATH is set to: $DATABASE_PATH"
 
+wait_for_flask() {
+    echo "Waiting for Flask to start..."
+    until curl -s http://127.0.0.1:5123 > /dev/null; do
+        sleep 2
+        echo -n "."
+    done
+    echo ""
+    echo "Flask is up and running."
+}
+
 # =============================================================================
 # Execute Based on OS
 # =============================================================================
@@ -537,7 +549,8 @@ if [[ "$OSTYPE" == "cygwin" || "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; t
     # =============================================================================
     # Wait for Flask to Start
     # =============================================================================
-    sleep 60
+    echo "Waiting for Flask to initialize..."
+    wait_for_flask
 
     # =============================================================================
     # Open the Application in the Default Browser Based on OS

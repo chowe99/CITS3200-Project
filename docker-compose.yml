@@ -12,10 +12,11 @@ services:
       FLASK_APP: app.py
       FLASK_ENV: development
       FLASK_DEBUG: 1
-      DATABASE_PATH: /mnt/irds/soil_test_results.db
+      DATABASE_PATH: /mnt/irds/soil_tests.db
       SMB_USERNAME: "${SMB_USERNAME}"
       SMB_PASSWORD: "${SMB_PASSWORD}"
       REAL_NAS: "${REAL_NAS:-true}"
+      LOCKFILE_PATH: "${LOCKFILE_PATH:-/mnt/irds/lock.lock}"  # Added environment variable
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5123"]
       interval: 5s
@@ -24,5 +25,3 @@ services:
 
 volumes:
   smb:
-
-

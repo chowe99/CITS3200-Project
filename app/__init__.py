@@ -33,9 +33,12 @@ def create_app():
         app.logger.debug(f"The folder '{folder_path}' does not exist.")
 
 
-    # Use the database at /mnt/irds/soil_test_results.db
-    db_path = os.environ.get('DATABASE_PATH', '/mnt/nas/soil_test_results.db')
+    # Use the DATABASE_PATH environment variable
+    db_path = os.getenv('DATABASE_PATH', 'sqlite:///soil_tests.db')
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    
+    # Replace backslashes with forward slashes for SQLite URI compatibility
+    db_path = db_path.replace('\\', '/')
 
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
