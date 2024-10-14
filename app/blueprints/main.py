@@ -1,4 +1,5 @@
 # app/blueprints/main.py
+
 import logging
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app, session
 from app.database import (
@@ -37,56 +38,13 @@ from sqlalchemy import and_, or_
 # Set LOCKFILE_PATH from environment variable with a default value
 LOCKFILE_PATH = os.getenv('LOCKFILE_PATH', '/mnt/irds/lock.lock')  
 
-def acquire_lock(timeout=30, max_lock_age=300, check_interval=1):
-    """Attempt to acquire a lock by creating a lockfile.
-       If the lockfile is older than max_lock_age seconds, override it."""
-    os.makedirs(os.path.dirname(LOCKFILE_PATH), exist_ok=True)  # Ensure directory exists
-    start_time = time.time()
-    while True:
-        try:
-            # Attempt to create the lock file exclusively
-            fd = os.open(LOCKFILE_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            # Write the current timestamp to the lock file
-            with os.fdopen(fd, 'w') as f:
-                f.write(str(time.time()))
-            # Lock acquired
-            return True
-        except FileExistsError:
-            # Lock file exists, check its age
-            lock_age = time.time() - os.path.getmtime(LOCKFILE_PATH)
-            if lock_age > max_lock_age:
-                # Assume the lock is stale and override it
-                print("Stale lock detected. Overriding the lock.")
-                try:
-                    os.remove(LOCKFILE_PATH)
-                except FileNotFoundError:
-                    continue  # Another process might have removed it
-            else:
-                # Check if timeout has been reached
-                if time.time() - start_time > timeout:
-                    return False
-                time.sleep(check_interval)
-        except PermissionError as e:
-            logger.error(f"Permission denied while acquiring lock: {e}")
-            raise  # Re-raise the exception for higher-level handling
-        except Exception as e:
-            logger.exception(f"Unexpected error while acquiring lock: {e}")
-            raise  # Re-raise the exception for higher-level handling
-
-def release_lock():
-    """Release the lock by deleting the lockfile."""
-    try:
-        os.remove(LOCKFILE_PATH)
-    except FileNotFoundError:
-        pass  # Lock file already removed
-
-
-# Set up basic logging configuration
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s:%(name)s:%(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# Set up basic logging configuration if not already configured
+if not logging.getLogger(__name__).hasHandlers():
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s %(levelname)s:%(name)s:%(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
 logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
@@ -116,13 +74,81 @@ def verify_password(stored_salt, stored_hash, password_attempt):
     pwd_hash = hashlib.pbkdf2_hmac('sha256', password_attempt.encode(), stored_salt, 100000)
     return pwd_hash == stored_hash
 
+def acquire_lock(timeout=30, max_lock_age=300, check_interval=1):
+    """Attempt to acquire a lock by creating a lockfile.
+       If the lockfile is older than max_lock_age seconds, override it."""
+    os.makedirs(os.path.dirname(LOCKFILE_PATH), exist_ok=True)  # Ensure directory exists
+    start_time = time.time()
+    logger.debug(f"Attempting to acquire lock. Lockfile path: {LOCKFILE_PATH}")
+    while True:
+        try:
+            # Attempt to create the lock file exclusively
+            fd = os.open(LOCKFILE_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            # Write the current timestamp to the lock file
+            with os.fdopen(fd, 'w') as f:
+                f.write(str(time.time()))
+            # Lock acquired
+            logger.info(f"Lock acquired successfully. Lockfile created at: {LOCKFILE_PATH}")
+            return True
+        except FileExistsError:
+            # Lock file exists, check its age
+            try:
+                lock_age = time.time() - os.path.getmtime(LOCKFILE_PATH)
+                logger.debug(f"Existing lockfile age: {lock_age} seconds.")
+            except Exception as e:
+                logger.error(f"Error accessing lockfile '{LOCKFILE_PATH}': {e}")
+                raise
 
-# app/blueprints/main.py
+            if lock_age > max_lock_age:
+                # Assume the lock is stale and override it
+                logger.warning(f"Stale lock detected. Lockfile is {lock_age} seconds old and will be overridden.")
+                try:
+                    os.remove(LOCKFILE_PATH)
+                    logger.info(f"Stale lockfile '{LOCKFILE_PATH}' removed.")
+                except FileNotFoundError:
+                    logger.warning(f"Lockfile '{LOCKFILE_PATH}' was already removed by another process.")
+                    continue  # Another process might have removed it
+                except PermissionError as e:
+                    logger.error(f"Permission denied while removing stale lockfile '{LOCKFILE_PATH}': {e}")
+                    raise
+                except Exception as e:
+                    logger.exception(f"Unexpected error while removing stale lockfile '{LOCKFILE_PATH}': {e}")
+                    raise
+            else:
+                # Check if timeout has been reached
+                elapsed_time = time.time() - start_time
+                logger.debug(f"Lockfile '{LOCKFILE_PATH}' is currently held. Elapsed time: {elapsed_time} seconds.")
+                if elapsed_time > timeout:
+                    logger.error(f"Failed to acquire lock within {timeout} seconds.")
+                    return False
+                time.sleep(check_interval)
+        except PermissionError as e:
+            logger.error(f"Permission denied while creating lockfile '{LOCKFILE_PATH}': {e}")
+            raise  # Re-raise the exception for higher-level handling
+        except Exception as e:
+            logger.exception(f"Unexpected error while acquiring lock: {e}")
+            raise  # Re-raise the exception for higher-level handling
+
+def release_lock():
+    """Release the lock by deleting the lockfile."""
+    try:
+        if os.path.exists(LOCKFILE_PATH):
+            os.remove(LOCKFILE_PATH)
+            logger.info(f"Lock released successfully. Lockfile '{LOCKFILE_PATH}' deleted.")
+        else:
+            logger.warning(f"Attempted to release lock, but lockfile '{LOCKFILE_PATH}' does not exist.")
+    except PermissionError as e:
+        logger.error(f"Permission denied while deleting lockfile '{LOCKFILE_PATH}': {e}")
+        raise  # Re-raise the exception for higher-level handling
+    except Exception as e:
+        logger.exception(f"Unexpected error while releasing lockfile '{LOCKFILE_PATH}': {e}")
+        raise  # Re-raise the exception for higher-level handling
+
 
 @main.route('/upload', methods=['POST'])
 def upload_file():
     logger.info("Received upload request.")
-    
+
     # Attempt to acquire the lock before writing
     if not acquire_lock():
         logger.warning("Lock acquisition failed. Another upload is in progress.")
@@ -247,6 +273,7 @@ def upload_file():
         release_lock()
         logger.debug("Lock released after upload attempt.")
 
+
 @main.route('/')
 def home():
     try:
@@ -258,10 +285,11 @@ def home():
         x_axis_options = [col for col in columns if col != "spreadsheet_id"]
         y_axis_options = [col for col in columns if col not in ["spreadsheet_id", "time_start_of_stage", "id"]]
 
-        logger.debug(f"Loaded tables: {tables}")
-        logger.debug(f"Loaded instances: {instances}")
-        logger.debug(f"X-axis options: {x_axis_options}")
-        logger.debug(f"Y-axis options: {y_axis_options}")
+        # Uncomment these lines if you need to debug
+        # logger.debug(f"Loaded tables: {tables}")
+        # logger.debug(f"Loaded instances: {instances}")
+        # logger.debug(f"X-axis options: {x_axis_options}")
+        # logger.debug(f"Y-axis options: {y_axis_options}")
     except Exception as e:
         flash('Unable to connect to the database. Please ensure the NAS is mounted.', 'error')
         tables = []
@@ -297,7 +325,6 @@ def plot():
         selected_tables = request.form.getlist('table_name[]')
         instances_json = request.form.get('instances_json')
         decrypt_password = request.form.get("decrypt_password")
-        
 
         preset = request.form.get('preset-options')
 
@@ -310,19 +337,30 @@ def plot():
             if not y_axis:
                 logger.error("No Y-axis selected in plot request.")
                 return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
-           
-        logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
+        logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
         # Process selected tables and instances to get spreadsheet IDs
         spreadsheet_ids = set()
 
+        # If 'Select Individual Spreadsheets' is checked, 'table_name[]' will be present
+        # Else, plot all public (and encrypted if password is provided) spreadsheets
         if selected_tables:
             # Get spreadsheet IDs from selected tables
             spreadsheets = Spreadsheet.query.filter(Spreadsheet.spreadsheet_name.in_(selected_tables)).all()
             spreadsheet_ids.update([s.spreadsheet_id for s in spreadsheets])
             logger.debug(f"Found {len(spreadsheet_ids)} spreadsheet IDs from selected tables.")
+        else:
+            # Select all public spreadsheets
+            public_spreadsheets = Spreadsheet.query.filter_by(encrypted=False).all()
+            spreadsheet_ids.update([s.spreadsheet_id for s in public_spreadsheets])
+            logger.debug(f"Selected all public spreadsheets: {len(public_spreadsheets)} found.")
 
+            # If decrypt_password is provided, also include all encrypted spreadsheets
+            if decrypt_password:
+                encrypted_spreadsheets = Spreadsheet.query.filter_by(encrypted=True).all()
+                spreadsheet_ids.update([s.spreadsheet_id for s in encrypted_spreadsheets])
+                logger.debug(f"Selected all encrypted spreadsheets due to provided password: {len(encrypted_spreadsheets)} found.")
 
         if instances_json:
             instances = json.loads(instances_json)
@@ -344,7 +382,6 @@ def plot():
                 ).with_entities(SpreadsheetInstance.spreadsheet_id)
                 spreadsheet_ids.update([s[0] for s in spreadsheet_ids_query.all()])
             logger.debug(f"Total unique spreadsheet IDs after processing instances: {len(spreadsheet_ids)}")
-
 
         if not spreadsheet_ids:
             logger.error("No spreadsheets match the selected filters.")
@@ -369,7 +406,7 @@ def plot():
         if preset == "non_calc_3":
             y_axis = ['vol_strain'] + y_axis
             x_axis = 'axial_strain'
-        
+
         # Calculated preset options
         if preset == "calc_1":
             y_axis = ['e'] + y_axis
@@ -380,7 +417,7 @@ def plot():
         if preset == "calc_3":
             y_axis = ['q', 'p'] + y_axis
             x_axis = 'p'
-        
+
         for idx, spreadsheet_id in enumerate(spreadsheet_ids):
             spreadsheet = Spreadsheet.query.get(spreadsheet_id)
             if not spreadsheet:
@@ -390,12 +427,12 @@ def plot():
 
             table_name = spreadsheet.spreadsheet_name
             color_map[table_name] = colors[idx % len(colors)]
-            logger.debug(f"Processing Spreadsheet '{table_name}' with color '{color_map[table_name]}'.")
+            logger.debug(f"Processing Spreadsheet '{table_name}' with color '{color_map[table_name]}.'")
 
             try:
                 if spreadsheet.encrypted:
                     logger.debug(f"Spreadsheet '{table_name}' is encrypted. Attempting decryption.")
-                    
+
                     if not decrypt_password:
                         logger.error(f"Decryption password not provided for encrypted Spreadsheet '{table_name}'.")
                         plot_messages.append(f"Password required for spreadsheet '{table_name}'.")
@@ -405,7 +442,7 @@ def plot():
                         logger.error(f"Incorrect decryption password for Spreadsheet '{table_name}'.")
                         plot_messages.append(f"Incorrect password for spreadsheet '{table_name}'.")
                         continue
-                    
+
                     # Decrypt data
                     key = derive_key(decrypt_password, spreadsheet.key_salt)
                     iv = spreadsheet.iv
@@ -470,20 +507,20 @@ def plot():
         # Create the Plotly figure
         fig = go.Figure()
 
-        if preset == "calc_1" or preset =="calc_2" or preset == "calc_3":
+        if preset in ["calc_1", "calc_2", "calc_3"]:
             for table_name in data['source'].unique():
                 table_data = data[data['source'] == table_name]
                 if preset == "calc_1": 
-                    y_preset = 'e' #Swap x-axis and y-axis (just for this option)
+                    y_preset = 'e'  # Swap x-axis and y-axis (just for this option)
                     x_axis = "log(p')"
                     table_data[x_axis] = np.log(table_data['p'])
                 if preset == "calc_2":
                     y_preset = "q/p'"
-                    table_data[y_preset] = table_data['q']/table_data['p']
+                    table_data[y_preset] = table_data['q'] / table_data['p']
                 if preset == "calc_3":
                     qmax = table_data['q'].max()
                     y_preset = "qmax/p'"
-                    table_data[y_preset] = qmax/ table_data['p']   
+                    table_data[y_preset] = qmax / table_data['p']   
                 fig.add_trace(go.Scatter(
                     x=table_data[x_axis],
                     y=table_data[y_preset],
@@ -496,24 +533,24 @@ def plot():
                         f"<b>{x_axis}</b>: %{{x}}<br>"
                         f"<b>Spreadsheet</b>: %{{text}}<br>"
                         "<extra></extra>"
-                        )
-                    ))
+                    )
+                ))
                 for y in np.unique(selected_y_columns):
                     fig.add_trace(go.Scatter(
-                    x=table_data[x_axis],
-                    y=table_data[y],
-                    mode='markers',
-                    name=f"{table_name} - {y}",
-                    marker=dict(color=color_map[table_name]),
-                    text=table_data['source'],
-                    hovertemplate=(
-                        f"<b>{y}</b>: %{{y}}<br>"
-                        f"<b>{x_axis}</b>: %{{x}}<br>"
-                        f"<b>Spreadsheet</b>: %{{text}}<br>"
-                        "<extra></extra>"
+                        x=table_data[x_axis],
+                        y=table_data[y],
+                        mode='markers',
+                        name=f"{table_name} - {y}",
+                        marker=dict(color=color_map[table_name]),
+                        text=table_data['source'],
+                        hovertemplate=(
+                            f"<b>{y}</b>: %{{y}}<br>"
+                            f"<b>{x_axis}</b>: %{{x}}<br>"
+                            f"<b>Spreadsheet</b>: %{{text}}<br>"
+                            "<extra></extra>"
                         )
                     ))   
-            y_axis = [y_preset] + selected_y_columns # Combining calculated column name and selected columns names
+            y_axis = [y_preset] + selected_y_columns  # Combining calculated column name and selected columns names
             logger.debug(f"Added plot trace for '{table_name} - {y}'.")        
         else:   
             y_axis = np.unique(y_axis) 
@@ -534,8 +571,8 @@ def plot():
                             "<extra></extra>"
                         )
                     ))
-        
-        y_axis = np.unique(["p'" if y == 'p' else y for y in y_axis]) #Add apostrophe to p
+
+        y_axis = np.unique(["p'" if y == 'p' else y for y in y_axis])  # Add apostrophe to p
         if x_axis == 'p':
             x_axis = "p'"
 
@@ -546,8 +583,8 @@ def plot():
         # Customize the layout
         fig.update_layout(
             title=title_name,
-            xaxis_title= x_axis_name,
-            yaxis_title= y_axis_name,
+            xaxis_title=x_axis_name,
+            yaxis_title=y_axis_name,
             legend_title="Source Tables",
             hovermode='closest',
             xaxis=dict(
@@ -588,6 +625,7 @@ def plot():
     finally:
         release_lock()
         logger.info("Lock released after plotting attempt.")
+
 
 @main.route('/add-data', methods=['GET', 'POST'])
 def add_data():
@@ -678,10 +716,12 @@ def view_data():
         # Decryption failed
         return jsonify({'success': False, 'message': 'Incorrect password or corrupted data.'})
 
+
 @main.route('/get-tables', methods=['GET'])
 def get_tables_route():
     tables = get_tables()
     return jsonify({'tables': tables})
+
 
 @main.route('/get-instances', methods=['GET'])
 def get_instances_route():

@@ -1,37 +1,31 @@
-// Function to toggle graph into fullscreen
-function toggleFullScreen() {
-  const plotContainer = document.getElementById('plot-container');
-  plotContainer.classList.toggle('fullscreen');
-}
-
-
-
 // Function to toggle full screen for the plot container
 function toggleFullScreen() {
-  const plotContainer = document.getElementById('plot-container');
+  const plotContainer = document.getElementById("plot-container");
 
   if (!document.fullscreenElement) {
-      // If not in full screen, request to enter full screen
-      plotContainer.requestFullscreen().catch(err => {
-          console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-      });
+    // If not in full screen, request to enter full screen
+    plotContainer.requestFullscreen().catch((err) => {
+      console.error(
+        `Error attempting to enable full-screen mode: ${err.message} (${err.name})`,
+      );
+    });
   } else {
-      // If already in full screen, exit full screen
-      document.exitFullscreen();
+    // If already in full screen, exit full screen
+    document.exitFullscreen();
   }
 }
 
 // Function to handle resizing of the plot
 function resizePlot() {
-  const plotContainer = document.getElementById('plot-container');
+  const plotContainer = document.getElementById("plot-container");
   Plotly.Plots.resize(plotContainer);
 }
 
 // Listen for fullscreen change event
-document.addEventListener('fullscreenchange', resizePlot);
-document.addEventListener('webkitfullscreenchange', resizePlot);
-document.addEventListener('mozfullscreenchange', resizePlot);
-document.addEventListener('MSFullscreenChange', resizePlot);
+document.addEventListener("fullscreenchange", resizePlot);
+document.addEventListener("webkitfullscreenchange", resizePlot);
+document.addEventListener("mozfullscreenchange", resizePlot);
+document.addEventListener("MSFullscreenChange", resizePlot);
 
 // Function to show messages
 async function showMessage(message, isSuccess, elementId) {
@@ -163,6 +157,7 @@ async function refreshTableList() {
       checkbox.type = "checkbox";
       checkbox.name = "table_name[]";
       checkbox.value = table;
+      checkbox.checked = true; // Ensure all are checked by default
 
       const label = document.createElement("label");
       label.textContent = table;
@@ -183,6 +178,7 @@ async function refreshTableList() {
     );
   }
 }
+
 // Handle the filter form submission
 document
   .getElementById("filter-form")
@@ -266,8 +262,8 @@ document
       const data = await response.json();
 
       // Clear all three divs before proceeding
-      document.getElementById("file-passing").innerHTML = "";       // Clear file passing messages
-      
+      document.getElementById("file-passing").innerHTML = ""; // Clear file passing messages
+
       console.log("Response from /plot:", data);
       if (data.graph_json) {
         const plotData = JSON.parse(data.graph_json);
@@ -275,19 +271,18 @@ document
 
         // Display all messages as plain text
         const messageArea = document.getElementById("file-passing");
-        data.plot_messages.forEach(message => {
-            const messageNode = document.createElement("p");
-            messageNode.textContent = message;
-            messageArea.appendChild(messageNode);  // Add each message as a paragraph
+        data.plot_messages.forEach((message) => {
+          const messageNode = document.createElement("p");
+          messageNode.textContent = message;
+          messageArea.appendChild(messageNode); // Add each message as a paragraph
         });
 
-
+        // Instead of using 'message', use plot_messages or a custom success message
         await showMessage(
-          message,
+          "Plot generated successfully.",
           true,
           "plot-message-area",
         );
-
       } else if (data.error) {
         await showMessage(data.error, false, "plot-message-area");
       } else {
@@ -297,7 +292,6 @@ document
           "plot-message-area",
         );
       }
-      
     } catch (error) {
       console.error("Error:", error);
       await showMessage(
@@ -334,4 +328,54 @@ document
   .getElementById("filter-form")
   .addEventListener("change", async function () {
     await showMessage("", true, "plot-message-area"); // Clear the plot message area
+  });
+
+// Additional JavaScript for handling the new UI elements
+
+// Toggle the visibility of the individual selection div
+document
+  .getElementById("select-individual")
+  .addEventListener("change", function () {
+    const individualSelection = document.getElementById("individual-selection");
+    if (this.checked) {
+      individualSelection.style.display = "block";
+    } else {
+      individualSelection.style.display = "none";
+      // Optionally, reset selections to plot all
+      const allCheckboxes = document.querySelectorAll(
+        '#individual-selection input[type="checkbox"]',
+      );
+      allCheckboxes.forEach((checkbox) => (checkbox.checked = true));
+    }
+  });
+
+// Clear all public selections
+document.getElementById("clear-public").addEventListener("click", function () {
+  const publicCheckboxes = document.querySelectorAll(
+    '#public-tables input[type="checkbox"]',
+  );
+  publicCheckboxes.forEach((checkbox) => (checkbox.checked = false));
+});
+
+// Clear all encrypted selections
+document
+  .getElementById("clear-encrypted")
+  .addEventListener("click", function () {
+    const encryptedCheckboxes = document.querySelectorAll(
+      '#encrypted-tables input[type="checkbox"]',
+    );
+    encryptedCheckboxes.forEach((checkbox) => (checkbox.checked = false));
+  });
+
+// Automatically select all encrypted tables if a password is provided upon form submission
+document
+  .getElementById("filter-form")
+  .addEventListener("submit", function (event) {
+    const decryptPassword = document.getElementById("decrypt_password").value;
+    if (decryptPassword) {
+      const encryptedCheckboxes = document.querySelectorAll(
+        '#encrypted-tables input[type="checkbox"]',
+      );
+      encryptedCheckboxes.forEach((checkbox) => (checkbox.checked = true));
+    }
   });
