@@ -9,6 +9,12 @@
   </head>
   <body>
     <div id="message-area"></div>
+    <div id="success-popup" class="popup">
+      <div class="popup-content">
+        <span class="close-button">&times;</span>
+        <div id="popup-messages" style="max-height: 300px; overflow-y: auto;"></div>
+      </div>
+    </div>
     {% with messages = get_flashed_messages() %}
     {% if messages %}
     <ul class="flashes">
@@ -32,45 +38,55 @@
     </form>
 
     <form id="filter-form">
-<!-- Spreadsheets selection -->
-<div id="spreadsheet-selection">
-  <h2>Select Table(s)</h2> <!-- Changed to a title -->
+      <!-- Spreadsheets selection -->
+      <div id="spreadsheet-selection">
+        <h2>Spreadsheet Selection</h2> <!-- Updated heading -->
 
-  
-  <!-- Non-encrypted tables -->
-  <div id="non-encrypted-tables">
-    <h3>Non-encrypted Tables:</h3>
-    <div id="table-checkboxes">
-      {% for table in tables %}
-        {% if not table.encrypted %}
+        <!-- New Checkbox to Toggle Individual Selection -->
         <div>
-          <!-- Checkbox for table selection -->
-          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> 
-          {{ table.spreadsheet_name }}<br>
+          <input type="checkbox" id="select-individual" name="select_individual">
+          <label for="select-individual">Select Individual Spreadsheets</label>
         </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  </div>
 
-  <!-- Encrypted tables -->
-  <div id="encrypted-tables">
-    <h3>Encrypted Tables:</h3>
-    <div id="table-checkboxes">
-      {% for table in tables %}
-        {% if table.encrypted %}
-        <div>
-          <!-- Checkbox for table selection -->
-          <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}"> 
-          {{ table.spreadsheet_name }}<br>
+        <!-- Hidden Div for Individual Spreadsheet Selection -->
+        <div id="individual-selection" style="display: none; margin-top: 10px;">
+          <!-- Public (Non-Encrypted) Tables -->
+          <div id="public-tables">
+            <h3>Public Tables:</h3>
+            <div id="table-checkboxes">
+              {% for table in tables %}
+                {% if not table.encrypted %}
+                <div>
+                  <!-- Checkbox for table selection -->
+                  <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}" checked> 
+                  {{ table.spreadsheet_name }}<br>
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <!-- Button to Clear Selections -->
+            <button type="button" id="clear-public">Clear Public Selections</button>
+          </div>
+
+          <!-- Encrypted Tables -->
+          <div id="encrypted-tables" style="margin-top: 20px;">
+            <h3>Encrypted Tables:</h3>
+            <div id="encrypted-table-checkboxes">
+              {% for table in tables %}
+                {% if table.encrypted %}
+                <div>
+                  <!-- Checkbox for encrypted table selection -->
+                  <input type="checkbox" name="table_name[]" value="{{ table.spreadsheet_name }}" checked> 
+                  {{ table.spreadsheet_name }}<br>
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <!-- Button to Clear Selections -->
+            <button type="button" id="clear-encrypted">Clear Encrypted Selections</button>
+          </div>
         </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  </div>
-</div>
-
-
+      </div>
 
       <!-- Instances selection -->
       <div id="instance-selection">
@@ -89,10 +105,16 @@
         {% endfor %}
       </div>
 
-      <!-- X-Axis selection -->
+      <!-- Preset vs Custom Graph Selection -->
       <div>
+        <input type="checkbox" id="custom-graph" name="custom_graph">
+        <label for="custom-graph">Custom Graph</label>
+      </div>
+
+      <!-- X-Axis selection -->
+      <div id="preset-options-container">
         <h3>Preset plot options:</h3>
-        <select name="preset-options">
+        <select name="preset-options" id="preset-options">
           <option value="None">None</option>
           <option value="non_calc_1">p', q, induced PWP vs axial strain </option>
           <option value="non_calc_2">q vs p'</option>
@@ -103,29 +125,31 @@
         </select>
       </div>
       
-      <div>
-        <h3>Select X-Axis:</h3>
-        <select name="x_axis">
-          {% for column in x_axis_options %}
-          <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
-          {% endfor %}
-        </select>
-        <p>X-axis is only added if preset plot options is set at 'None'</p>
-      </div>
-
-      <!-- Y-Axis selection -->
-      <div>
-        <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
-        <div id="y-axis-container">
-          {% for column in y_axis_options %}
-          {% if column == 'p' %}
-          <input type="checkbox" name="y_axis" value="{{ column }}"> p'<br>
-          {% else %}
-          <input type="checkbox" name="y_axis" value="{{ column }}"> {{ column.replace('_', ' ').capitalize() }}<br>
-          {% endif %}
-          {% endfor %}
+      <!-- Custom X/Y Axis selection (hidden by default) -->
+      <div id="custom-axis-selection" style="display: none; margin-top: 10px;">
+        <div>
+          <h3>Select X-Axis:</h3>
+          <select name="x_axis" id="x_axis">
+            {% for column in x_axis_options %}
+            <option value="{{ column }}">{{ column.replace('_', ' ').capitalize() }}</option>
+            {% endfor %}
+          </select>
+          <p>X-axis is only added if preset plot options is set at 'None'</p>
         </div>
-        <p>Y-axes can be added to preset plots options.</p>
+
+        <div>
+          <h3>Select Y-Axis (Select multiple columns with checkboxes):</h3>
+          <div id="y-axis-container">
+            {% for column in y_axis_options %}
+            {% if column == 'p' %}
+            <input type="checkbox" name="y_axis" value="{{ column }}" checked> p'<br>
+            {% else %}
+            <input type="checkbox" name="y_axis" value="{{ column }}" checked> {{ column.replace('_', ' ').capitalize() }}<br>
+            {% endif %}
+            {% endfor %}
+          </div>
+          <p>Y-axes can be added to preset plots options.</p>
+        </div>
       </div>
 
       <!-- Decryption password -->
@@ -143,8 +167,6 @@
     <button id="fullscreen-button" onclick="toggleFullScreen()">Full Screen</button>
 
     <div id="plot-container"></div>
-
-
 
     <!-- Link to external JavaScript file -->
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>

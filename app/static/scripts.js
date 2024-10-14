@@ -1,39 +1,65 @@
-// Function to toggle graph into fullscreen
-function toggleFullScreen() {
-  const plotContainer = document.getElementById('plot-container');
-  plotContainer.classList.toggle('fullscreen');
-}
-
-
-
 // Function to toggle full screen for the plot container
 function toggleFullScreen() {
-  const plotContainer = document.getElementById('plot-container');
+  const plotContainer = document.getElementById("plot-container");
 
   if (!document.fullscreenElement) {
-      // If not in full screen, request to enter full screen
-      plotContainer.requestFullscreen().catch(err => {
-          console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-      });
+    // If not in full screen, request to enter full screen
+    plotContainer.requestFullscreen().catch((err) => {
+      console.error(
+        `Error attempting to enable full-screen mode: ${err.message} (${err.name})`,
+      );
+    });
   } else {
-      // If already in full screen, exit full screen
-      document.exitFullscreen();
+    // If already in full screen, exit full screen
+    document.exitFullscreen();
   }
 }
 
 // Function to handle resizing of the plot
 function resizePlot() {
-  const plotContainer = document.getElementById('plot-container');
+  const plotContainer = document.getElementById("plot-container");
   Plotly.Plots.resize(plotContainer);
 }
 
 // Listen for fullscreen change event
-document.addEventListener('fullscreenchange', resizePlot);
-document.addEventListener('webkitfullscreenchange', resizePlot);
-document.addEventListener('mozfullscreenchange', resizePlot);
-document.addEventListener('MSFullscreenChange', resizePlot);
+document.addEventListener("fullscreenchange", resizePlot);
+document.addEventListener("webkitfullscreenchange", resizePlot);
+document.addEventListener("mozfullscreenchange", resizePlot);
+document.addEventListener("MSFullscreenChange", resizePlot);
 
-// Function to show messages
+// Function to show popup messages
+function showPopup(messages) {
+  const popup = document.getElementById("success-popup");
+  const popupMessages = document.getElementById("popup-messages");
+  const closeButton = document.querySelector(".close-button");
+
+  // Clear previous messages
+  popupMessages.innerHTML = "";
+
+  // Add new messages
+  messages.forEach((message) => {
+    const messageNode = document.createElement("p");
+    messageNode.textContent = message;
+    popupMessages.appendChild(messageNode);
+  });
+
+  // Display the popup
+  popup.style.display = "flex"; // Changed to flex to center content
+
+  // Close the popup when the close button is clicked
+  closeButton.onclick = function () {
+    popup.style.display = "none";
+  };
+
+  // Also close the popup when clicking outside the content
+  window.onclick = function (event) {
+    if (event.target == popup) {
+      popup.style.display = "none";
+    }
+  };
+}
+
+// Function to show messages in a specific area
 async function showMessage(message, isSuccess, elementId) {
   const messageArea = document.getElementById(elementId);
   if (messageArea) {
@@ -163,6 +189,7 @@ async function refreshTableList() {
       checkbox.type = "checkbox";
       checkbox.name = "table_name[]";
       checkbox.value = table;
+      checkbox.checked = true; // Ensure all are checked by default
 
       const label = document.createElement("label");
       label.textContent = table;
@@ -183,6 +210,7 @@ async function refreshTableList() {
     );
   }
 }
+
 // Handle the filter form submission
 document
   .getElementById("filter-form")
@@ -192,11 +220,20 @@ document
 
     const formData = new FormData(event.target);
 
+    // Determine if Custom Graph is selected
+    const isCustomGraph = document.getElementById("custom-graph").checked;
+
     // Collect selected tables
-    const selectedTables = Array.from(
-      document.querySelectorAll('input[name="table_name[]"]:checked'),
-    ).map((checkbox) => checkbox.value);
-    console.log("Selected Tables:", selectedTables);
+    let selectedTables = [];
+    if (document.getElementById("select-individual").checked) {
+      selectedTables = Array.from(
+        document.querySelectorAll('input[name="table_name[]"]:checked'),
+      ).map((checkbox) => checkbox.value);
+      console.log("Selected Tables:", selectedTables);
+    } else {
+      // If individual selection not enabled, backend handles selection based on password
+      console.log("Individual Spreadsheet Selection not enabled.");
+    }
 
     // Collect selected instances and their values
     const instances = [];
@@ -216,43 +253,71 @@ document
       });
     console.log("Collected Instances:", instances);
 
-    // Collect x_axis value
-    const x_axis_value = document.querySelector('select[name="x_axis"]').value;
+    // Collect preset value
+    const preset = document.getElementById("preset-options").value;
 
-    // Collect selected y_axis values
-    const y_axis_values = Array.from(
-      document.querySelectorAll('input[name="y_axis"]:checked'),
-    ).map((checkbox) => checkbox.value);
+    // Collect x_axis value if Custom Graph is selected
+    let x_axis_value = "";
+    if (isCustomGraph) {
+      x_axis_value = document.getElementById("x_axis").value;
+    }
 
+    // Collect selected y_axis values if Custom Graph is selected
+    let y_axis_values = [];
+    if (isCustomGraph) {
+      y_axis_values = Array.from(
+        document.querySelectorAll('input[name="y_axis"]:checked'),
+      ).map((checkbox) => checkbox.value);
+    }
+
+    console.log("Preset:", preset);
     console.log("X Axis:", x_axis_value);
     console.log("Y Axis:", y_axis_values);
 
-    // Ensure x_axis and y_axis are selected
-    if (!x_axis_value) {
-      await showMessage(
-        "Please select an X-Axis value.",
-        false,
-        "plot-message-area",
-      );
-      return;
-    }
+    // Validation
+    if (!isCustomGraph) {
+      // If not custom, assume preset is used
+      if (preset === "None") {
+        await showMessage(
+          "Please select a preset option or enable Custom Graph.",
+          false,
+          "plot-message-area",
+        );
+        return;
+      }
+    } else {
+      // If Custom Graph is selected, validate X and Y axes
+      if (!x_axis_value) {
+        await showMessage(
+          "Please select an X-Axis value.",
+          false,
+          "plot-message-area",
+        );
+        return;
+      }
 
-    if (y_axis_values.length === 0) {
-      await showMessage(
-        "Please select at least one Y-Axis value.",
-        false,
-        "plot-message-area",
-      );
-      return;
+      if (y_axis_values.length === 0) {
+        await showMessage(
+          "Please select at least one Y-Axis value.",
+          false,
+          "plot-message-area",
+        );
+        return;
+      }
     }
 
     // Include selected tables and instances in form data
-    selectedTables.forEach((table) => formData.append("table_name[]", table));
+    if (document.getElementById("select-individual").checked) {
+      selectedTables.forEach((table) => formData.append("table_name[]", table));
+    }
     formData.append("instances_json", JSON.stringify(instances));
 
-    // Include x_axis and y_axis in form data
-    formData.append("x_axis", x_axis_value);
-    y_axis_values.forEach((y_axis) => formData.append("y_axis", y_axis));
+    // Include preset, x_axis, and y_axis in form data
+    formData.append("preset-options", preset);
+    if (isCustomGraph) {
+      formData.append("x_axis", x_axis_value);
+      y_axis_values.forEach((y_axis) => formData.append("y_axis", y_axis));
+    }
 
     // Decryption password
     const decryptPassword = document.getElementById("decrypt_password").value;
@@ -266,28 +331,17 @@ document
       const data = await response.json();
 
       // Clear all three divs before proceeding
-      document.getElementById("file-passing").innerHTML = "";       // Clear file passing messages
-      
+      document.getElementById("file-passing").innerHTML = ""; // Clear file passing messages
+
       console.log("Response from /plot:", data);
       if (data.graph_json) {
         const plotData = JSON.parse(data.graph_json);
         Plotly.react("plot-container", plotData.data, plotData.layout);
 
-        // Display all messages as plain text
-        const messageArea = document.getElementById("file-passing");
-        data.plot_messages.forEach(message => {
-            const messageNode = document.createElement("p");
-            messageNode.textContent = message;
-            messageArea.appendChild(messageNode);  // Add each message as a paragraph
-        });
-
-
-        await showMessage(
-          message,
-          true,
-          "plot-message-area",
-        );
-
+        // Display all messages in the popup
+        if (data.plot_messages && data.plot_messages.length > 0) {
+          showPopup(data.plot_messages);
+        }
       } else if (data.error) {
         await showMessage(data.error, false, "plot-message-area");
       } else {
@@ -297,7 +351,6 @@ document
           "plot-message-area",
         );
       }
-      
     } catch (error) {
       console.error("Error:", error);
       await showMessage(
@@ -334,4 +387,69 @@ document
   .getElementById("filter-form")
   .addEventListener("change", async function () {
     await showMessage("", true, "plot-message-area"); // Clear the plot message area
+  });
+
+// Additional JavaScript for handling the new UI elements
+
+// Toggle the visibility of the individual selection div
+document
+  .getElementById("select-individual")
+  .addEventListener("change", function () {
+    const individualSelection = document.getElementById("individual-selection");
+    if (this.checked) {
+      individualSelection.style.display = "block";
+    } else {
+      individualSelection.style.display = "none";
+      // Reset selections to plot all
+      const allCheckboxes = document.querySelectorAll(
+        '#individual-selection input[type="checkbox"]',
+      );
+      allCheckboxes.forEach((checkbox) => (checkbox.checked = true));
+    }
+  });
+
+// Toggle the visibility of the custom axis selection div
+document.getElementById("custom-graph").addEventListener("change", function () {
+  const customAxisSelection = document.getElementById("custom-axis-selection");
+  if (this.checked) {
+    customAxisSelection.style.display = "block";
+  } else {
+    customAxisSelection.style.display = "none";
+    // Optionally, reset custom axis selections
+    const xAxisSelect = document.getElementById("x_axis");
+    const yAxisCheckboxes = document.querySelectorAll('input[name="y_axis"]');
+    if (xAxisSelect) xAxisSelect.selectedIndex = 0;
+    yAxisCheckboxes.forEach((cb) => (cb.checked = true));
+  }
+});
+
+// Clear all public selections
+document.getElementById("clear-public").addEventListener("click", function () {
+  const publicCheckboxes = document.querySelectorAll(
+    '#public-tables input[type="checkbox"]',
+  );
+  publicCheckboxes.forEach((checkbox) => (checkbox.checked = false));
+});
+
+// Clear all encrypted selections
+document
+  .getElementById("clear-encrypted")
+  .addEventListener("click", function () {
+    const encryptedCheckboxes = document.querySelectorAll(
+      '#encrypted-tables input[type="checkbox"]',
+    );
+    encryptedCheckboxes.forEach((checkbox) => (checkbox.checked = false));
+  });
+
+// Automatically select all encrypted tables if password is provided upon form submission
+document
+  .getElementById("filter-form")
+  .addEventListener("submit", function (event) {
+    const decryptPassword = document.getElementById("decrypt_password").value;
+    if (decryptPassword) {
+      const encryptedCheckboxes = document.querySelectorAll(
+        '#encrypted-tables input[type="checkbox"]',
+      );
+      encryptedCheckboxes.forEach((checkbox) => (checkbox.checked = true));
+    }
   });
