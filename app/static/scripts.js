@@ -1,3 +1,38 @@
+// Function to toggle graph into fullscreen
+function toggleFullScreen() {
+  const plotContainer = document.getElementById('plot-container');
+  plotContainer.classList.toggle('fullscreen');
+}
+
+
+
+// Function to toggle full screen for the plot container
+function toggleFullScreen() {
+  const plotContainer = document.getElementById('plot-container');
+
+  if (!document.fullscreenElement) {
+      // If not in full screen, request to enter full screen
+      plotContainer.requestFullscreen().catch(err => {
+          console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+      });
+  } else {
+      // If already in full screen, exit full screen
+      document.exitFullscreen();
+  }
+}
+
+// Function to handle resizing of the plot
+function resizePlot() {
+  const plotContainer = document.getElementById('plot-container');
+  Plotly.Plots.resize(plotContainer);
+}
+
+// Listen for fullscreen change event
+document.addEventListener('fullscreenchange', resizePlot);
+document.addEventListener('webkitfullscreenchange', resizePlot);
+document.addEventListener('mozfullscreenchange', resizePlot);
+document.addEventListener('MSFullscreenChange', resizePlot);
+
 // Function to show messages
 async function showMessage(message, isSuccess, elementId) {
   const messageArea = document.getElementById(elementId);
