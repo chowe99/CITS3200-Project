@@ -5,7 +5,7 @@ openpyxl             # For reading Excel files if needed
 pandas               # For handling data querying and manipulation
 #sqlite3              # Built-in, no need to add separately; included with Python standard library
 plotly
-pysqlcipher3
+#pysqlcipher3
 cryptography
 pytest
 selenium
