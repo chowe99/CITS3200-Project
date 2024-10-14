@@ -446,8 +446,8 @@ def plot():
                 continue
 
         if not data_frames:
-            logger.error("No data found for the selected spreadsheets.")
-            return jsonify({"error": "No data found for the selected spreadsheets."}), 404
+            logger.error("No data found for the selected spreadsheets or incorrect password.")
+            return jsonify({"error": "No data found for the selected spreadsheets or incorrect password."}), 404
 
         # Combine data
         data = pd.concat(data_frames, ignore_index=True)

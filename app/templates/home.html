@@ -34,7 +34,6 @@
     <form id="filter-form">
 <!-- Spreadsheets selection -->
 <div id="spreadsheet-selection">
-  <label>Select table(s):</label>
   <h2>Select Table(s)</h2> <!-- Changed to a title -->
 
   
@@ -138,8 +137,13 @@
 
     <!-- Container to display the plot -->
     <h2>Generated Plot:</h2>
-    <div id="plot-container">
-    </div>
+    <div id="plot-message-area"></div>
+
+    <div id="file-passing"></div>
+
+    <div id="plot-container"></div>
+
+
 
     <!-- Link to external JavaScript file -->
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>
