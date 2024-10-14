@@ -521,7 +521,7 @@ def plot():
                         )
                     ))
         
-        y_axis = ["p'" if y == 'p' else y for y in y_axis] #Add apostrophe to p
+        y_axis = np.unique(["p'" if y == 'p' else y for y in y_axis]) #Add apostrophe to p
         if x_axis == 'p':
             x_axis = "p'"
 
