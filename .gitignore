@@ -5,7 +5,16 @@ __pycache__/
 
 *.DS_Store
 
-# databases
+# Test Spreadsheets
+# tests/e2e/*.xlsx
+
+# Secrets
+.secrets
+
+# Docker
+docker-compose.override.yml
+
+# Databases
 *.db
 
 # C extensions

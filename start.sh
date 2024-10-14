@@ -4,7 +4,7 @@
 # Script: start.sh
 # Description: Mounts an SMB/NAS share based on the host OS, sets the NAS_MOUNT_PATH,
 #              and starts the Docker container while handling cleanup on exit.
-# Usage: ./start.sh [SMB_PATH]
+# Usage: ./start.sh "[SMB_PATH]"
 #        - SMB_PATH: Optional argument to specify a custom SMB share path.
 #                  Default is "smb://drive.irds.uwa.edu.au/RES-ENG-CITS3200-P000735"
 # =============================================================================
@@ -90,9 +90,9 @@ mount_linux() {
             echo "Error: Failed to create mount point at $mount_point."
             exit 1
         fi
-        # Mount the SMB share as guest
+        # Mount the SMB share with provided credentials
         echo "Mounting SMB share $smb_share to $mount_point..."
-        sudo mount.cifs "$smb_share" "$mount_point" -o vers=3.0,guest,uid=$(id -u),gid=$(id -g),file_mode=0775,dir_mode=0775
+        sudo mount.cifs "$smb_share" "$mount_point" -o vers=3.0,username="${SMB_USERNAME}",password="${SMB_PASSWORD}",uid=$(id -u),gid=$(id -g),file_mode=0775,dir_mode=0775
         if [ $? -ne 0 ]; then
             echo "Error: Failed to mount SMB share on Linux."
             exit 1
@@ -106,7 +106,7 @@ mount_linux() {
 
 # =============================================================================
 # Function: mount_macos
-# Description: Mounts the SMB share on macOS systems using osascript without credentials.
+# Description: Mounts the SMB share on macOS systems using osascript.
 # Arguments:
 #   $1 - SMB share path without protocol (e.g., drive.irds.uwa.edu.au/RES-ENG-CITS3200-P000735)
 # =============================================================================
@@ -124,6 +124,7 @@ mount_macos() {
         # Mount the SMB share via osascript
         echo "Mounting SMB share smb://$smb_share to $mount_point..."
         osascript -e "mount volume \"smb://$smb_share\""
+
         if [ $? -ne 0 ]; then
             echo "Error: Failed to mount SMB share on macOS."
             exit 1
@@ -236,8 +237,29 @@ parse_smb_path() {
 }
 
 # =============================================================================
+# Function: validate_env_vars
+# Description: Validates that necessary environment variables are set for Linux and Windows.
+# =============================================================================
+validate_env_vars() {
+    if [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "cygwin" || "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+        if [ -z "$SMB_USERNAME" ] || [ -z "$SMB_PASSWORD" ]; then
+            echo "Error: SMB_USERNAME and SMB_PASSWORD must be set in your environment."
+            echo "Please add the following lines to your ~/.bashrc or ~/.zshrc:"
+            echo "export SMB_USERNAME='your_username'"
+            echo "export SMB_PASSWORD='your_password'"
+            exit 1
+        fi
+    fi
+}
+
+# =============================================================================
 # Main Script Execution Starts Here
 # =============================================================================
+
+# =============================================================================
+# Validate Environment Variables (only for Linux and Windows)
+# =============================================================================
+validate_env_vars
 
 # =============================================================================
 # Define Default SMB Share Path
@@ -260,7 +282,6 @@ fi
 # =============================================================================
 SMB_SHARE=$(parse_smb_path "$SMB_PATH_INPUT")
 echo "Parsed SMB share: $SMB_SHARE"
-
 
 # =============================================================================
 # Detect Operating System and Mount SMB Share Accordingly

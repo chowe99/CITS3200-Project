@@ -7,4 +7,7 @@ pandas               # For handling data querying and manipulation
 plotly
 pysqlcipher3
 cryptography
+pytest
+selenium
 numpy
+
