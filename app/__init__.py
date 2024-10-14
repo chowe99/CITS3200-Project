@@ -19,20 +19,6 @@ def create_app():
     logger = logging.getLogger(__name__)
     logger.info("Starting Flask application.")
 
-
-    # Specify the folder path
-    folder_path = '//drive.irds.uwa.edu.au/RES-ENG-CITS3200-P000735'
-
-    # List all files in the specified folder
-    try:
-        with os.scandir(folder_path) as entries:
-            for entry in entries:
-                if entry.is_file():
-                    app.logger.debug(entry.name)
-    except FileNotFoundError:
-        app.logger.debug(f"The folder '{folder_path}' does not exist.")
-
-
     # Use the database at /mnt/irds/soil_test_results.db
     db_path = os.environ.get('DATABASE_PATH', '/mnt/nas/soil_test_results.db')
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
