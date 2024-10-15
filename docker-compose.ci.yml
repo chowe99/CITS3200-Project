@@ -1,0 +1,7 @@
+services:
+  web:
+    environment:
+      REAL_NAS: "false"
+    volumes:
+      - "./tests/integration:/mnt/irds"
+      - "./tests/e2e:/app/tests/e2e"  # Mount e2e tests directory

@@ -3,7 +3,18 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# databases
+*.DS_Store
+
+# Test Spreadsheets
+# tests/e2e/*.xlsx
+
+# Secrets
+.secrets
+
+# Docker
+docker-compose.override.yml
+
+# Databases
 *.db
 
 # C extensions
