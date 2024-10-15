@@ -291,7 +291,7 @@ def home():
         # logger.debug(f"X-axis options: {x_axis_options}")
         # logger.debug(f"Y-axis options: {y_axis_options}")
     except Exception as e:
-        flash('Unable to connect to the database. Please ensure the NAS is mounted.', 'error')
+        flash('Unable to connect to the database. Please ensure the IRDS is mounted.', 'error')
         tables = []
         instances = {}
         x_axis_options = []
@@ -328,17 +328,36 @@ def plot():
 
         preset = request.form.get('preset-options')
 
-        if preset == "None":
-            # Input validation
-            if not x_axis:
-                logger.error("Missing X-axis in plot request.")
-                return jsonify({"error": "X-axis field is missing from the request."}), 400
 
-            if not y_axis:
-                logger.error("No Y-axis selected in plot request.")
-                return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
-        else:
-            pass
+        # Process preset to modify y_axis and x_axis
+        if preset != "None":
+            if preset == "non_calc_1":
+                y_axis = ['p', 'q', 'induced_PWP'] + y_axis
+                x_axis = 'axial_strain'
+            elif preset == "non_calc_2":
+                y_axis = ['q'] + y_axis
+                x_axis = 'p'
+            elif preset == "non_calc_3":
+                y_axis = ['vol_strain'] + y_axis
+                x_axis = 'axial_strain'
+            elif preset == "calc_1":
+                y_axis = ['e'] + y_axis
+                x_axis = 'p'
+            elif preset == "calc_2":
+                y_axis = ["q/p'"] + y_axis
+                x_axis = 'axial_strain'
+            elif preset == "calc_3":
+                y_axis = ["qmax/p'"] + y_axis
+                x_axis = 'p'
+
+        # After processing preset, validate x_axis and y_axis
+        if not x_axis:
+            logger.error("Missing X-axis in plot request.")
+            return jsonify({"error": "X-axis field is missing from the request."}), 400
+
+        if not y_axis:
+            logger.error("No Y-axis selected in plot request.")
+            return jsonify({"error": "Please select at least one column for the Y-axis."}), 400
 
         logger.debug(f"Plot parameters - X-axis: {x_axis}, Y-axis: {y_axis}, Tables: {selected_tables}, Instances: {instances_json}")
 
@@ -595,12 +614,13 @@ def plot():
             yaxis=dict(
                 tickformat='.2f'
             ),
-            margin=dict(l=50, r=50, t=50, b=50),
+            margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin to accommodate legend
             dragmode='pan',
             legend=dict(
-                x=0.95,
-                y=0.95,
-                xanchor='right',
+                orientation='h',
+                y=-0.2,
+                x=0.5,
+                xanchor='center',
                 yanchor='top',
                 traceorder="normal",
                 bgcolor="rgba(255, 255, 255, 0.5)",
@@ -608,6 +628,7 @@ def plot():
                 borderwidth=1
             )
         )
+
         logger.info("Plotly figure created successfully.")
 
         # Serialize figure and messages

@@ -14,6 +14,7 @@ body {
 h1, h2, h3 {
   color: #333;
 }
+
 /* Form styling */
 form {
   display: flex;
@@ -27,16 +28,184 @@ form {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-/* Form elements styling */
-input[type="checkbox"] {
-  margin-right: 10px;
+/* Table styling */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
 }
 
-select {
+th, td {
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  padding: 15px;
+  vertical-align: top;
+}
+
+/* Remove border from last row */
+tbody tr:last-child td {
+  border-bottom: 1px solid #ddd;
+}
+
+/* Header cells */
+th {
+  background-color: #f2f2f2;
+  text-align: left;
+}
+
+/* Select Tables Section */
+#spreadsheet-selection {
+  width: 100%;
+}
+
+.table-row {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px;
+  border-top: 1px solid #ddd; /* Top border for each row */
+  border-bottom: 1px solid #ddd; /* Bottom border for each row */
+}
+
+.table-label {
+  flex-grow: 1;
+  padding: 10px;
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+.table-row:hover {
+  background-color: #e6f7ff;
+}
+
+.table-row input[type="checkbox"]:checked + .table-label {
+  background-color: #bae7ff;
+}
+
+/* Highlight selected rows */
+.table-row input[type="checkbox"]:checked + .table-label {
+  background-color: #bae7ff;
+}
+
+/* Instance Filters Section */
+.instance-filter {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.filter-name {
+  width: 40%;
+  font-weight: bold;
+}
+
+.filter-values {
+  width: 60%;
+}
+
+.filter-values select {
+  width: 100%;
   padding: 5px;
-  margin: 10px 0;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+/* Select Instance Filters dropdown */
+.instance-filter .filter-values select {
+  height: 30px;
+}
+
+/* Plot Selection Section */
+#plot-selection {
+  width: 100%;
+}
+
+.plot-row {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px;
+  border-top: 1px solid #ddd; /* Top border */
+  border-bottom: 1px solid #ddd; /* Bottom border */
+}
+
+.plot-label {
+  flex-grow: 1;
+  padding: 10px;
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+.plot-row:hover {
+  background-color: #e6f7ff;
+}
+
+.plot-row input[type="checkbox"]:checked + .plot-label {
+  background-color: #bae7ff;
+}
+
+/* Preset Plot Options */
+#preset-options-container {
+  margin-top: 10px;
+}
+
+#preset-options-container select {
+  width: 100%;
+}
+
+/* Custom Axis Selection */
+#custom-axis-selection {
+  margin-top: 10px;
+}
+
+#custom-axis-selection label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+#custom-axis-selection select {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+/* Custom Selection Dropdown */
+#custom-selection-dropdown {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+.custom-section {
+  margin-bottom: 15px;
+}
+
+.custom-section strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* Clear Buttons */
+.clear-button {
+  margin-top: 10px;
+  padding: 5px 10px;
+  background-color: #ff4d4f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.clear-button:hover {
+  background-color: #ff7875;
 }
 
 /* Button styling */
@@ -54,6 +223,32 @@ button:hover {
   background-color: #357ab7;
 }
 
+.close-button {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  cursor: pointer;
+}
+
+.close-button:hover,
+.close-button:focus {
+  color: black;
+  text-decoration: none;
+}
+
+#message-area, #plot-message-area {
+  margin: 10px 0;
+  font-size: 1.1em;
+}
+
+#file-passing {
+  margin: 10px 0;
+}
+
 /* Plot image container */
 div img {
   display: block;
@@ -66,8 +261,6 @@ div img {
 .value-checklist {
   margin-left: 20px; 
   padding: 5px;     
-  border-top: 1px solid #f4f4f9;
-  background-color: #4a90e2; 
 }
 
 /* Plotly Graph Enhancements */
@@ -141,29 +334,48 @@ div img {
   position: relative;
 }
 
-.close-button {
-  color: #aaa;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-  position: absolute;
-  top: 10px;
-  right: 20px;
-  cursor: pointer;
+/* Additional Styling for Table Rows */
+.table-row, .plot-row {
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
 }
 
-.close-button:hover,
-.close-button:focus {
-  color: black;
-  text-decoration: none;
+.table-row.selected, .plot-row.selected {
+  background-color: #bae7ff;
 }
 
-#message-area, #plot-message-area {
-  margin: 10px 0;
-  font-size: 1.1em;
+.custom-section + .custom-section {
+  border-top: 1px solid #ddd;
+  padding-top: 10px;
 }
 
-#file-passing {
-  margin: 10px 0;
+/* Responsive Design */
+@media (max-width: 768px) {
+  table, thead, tbody, th, td, tr { 
+    display: block; 
+  }
+
+  th, td {
+    box-sizing: border-box;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  th {
+    background-color: transparent;
+    border: none;
+    padding: 10px 0;
+    font-size: 1.2em;
+  }
+
+  td {
+    border: none;
+    padding: 10px 0;
+  }
+
+  .popup-content {
+    width: 90%;
+  }
 }
 

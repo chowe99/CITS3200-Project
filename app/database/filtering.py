@@ -26,6 +26,9 @@ def get_instances():
     return instance_dict
 
 def get_columns():
-    """Retrieve column names from the SpreadsheetRow model."""
-    return [column.name for column in SpreadsheetRow.__table__.columns if column.name != 'id']
+    """Retrieve column names from the SpreadsheetRow model, including calculated columns."""
+    columns = [column.name for column in SpreadsheetRow.__table__.columns if column.name != 'id']
+    # Add calculated columns used in presets
+    calculated_columns = ["q/p'", "qmax/p'"]
+    return columns + calculated_columns
 
