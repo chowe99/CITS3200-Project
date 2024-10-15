@@ -428,7 +428,10 @@ document.getElementById("clear-public").addEventListener("click", function () {
   const publicCheckboxes = document.querySelectorAll(
     '#public-tables input[type="checkbox"]',
   );
-  publicCheckboxes.forEach((checkbox) => (checkbox.checked = false));
+  publicCheckboxes.forEach((checkbox) => {
+    checkbox.checked = false; // Uncheck the checkbox
+    checkbox.removeAttribute("checked"); // Remove the 'checked' attribute
+  });
 });
 
 // Clear all encrypted selections
