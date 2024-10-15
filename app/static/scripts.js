@@ -182,7 +182,7 @@ async function refreshTableList() {
     const tablesData = await tablesResponse.json();
     const instancesData = await instancesResponse.json();
 
-    const tableCheckboxes = document.getElementById("table-checkboxes");
+    const tableCheckboxes = document.getElementById("custom-table-checkboxes");
     tableCheckboxes.innerHTML = ""; // Clear existing options
     tablesData.tables.forEach((table) => {
       const checkbox = document.createElement("input");
@@ -225,7 +225,7 @@ document
 
     // Collect selected tables
     let selectedTables = [];
-    if (document.getElementById("select-individual").checked) {
+    if (document.getElementById("preset-custom").checked) {
       selectedTables = Array.from(
         document.querySelectorAll('input[name="table_name[]"]:checked'),
       ).map((checkbox) => checkbox.value);
@@ -307,7 +307,7 @@ document
     }
 
     // Include selected tables and instances in form data
-    if (document.getElementById("select-individual").checked) {
+    if (document.getElementById("preset-custom").checked) {
       selectedTables.forEach((table) => formData.append("table_name[]", table));
     }
     formData.append("instances_json", JSON.stringify(instances));
@@ -393,16 +393,16 @@ document
 
 // Toggle the visibility of the individual selection div
 document
-  .getElementById("select-individual")
+  .getElementById("preset-custom")
   .addEventListener("change", function () {
-    const individualSelection = document.getElementById("individual-selection");
+    const individualSelection = document.getElementById("custom-selection");
     if (this.checked) {
       individualSelection.style.display = "block";
     } else {
       individualSelection.style.display = "none";
       // Reset selections to plot all
       const allCheckboxes = document.querySelectorAll(
-        '#individual-selection input[type="checkbox"]',
+        '#custom-selection input[type="checkbox"]',
       );
       allCheckboxes.forEach((checkbox) => (checkbox.checked = true));
     }
