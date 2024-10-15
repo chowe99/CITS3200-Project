@@ -105,11 +105,7 @@
         {% endfor %}
       </div>
 
-      <!-- Preset vs Custom Graph Selection -->
-      <div>
-        <input type="checkbox" id="custom-graph" name="custom_graph">
-        <label for="custom-graph">Custom Graph</label>
-      </div>
+
 
       <!-- X-Axis selection -->
       <div id="preset-options-container">
@@ -123,6 +119,13 @@
           <option value="calc_2">q/p' vs axial strain</option>
           <option value="calc_3">qmax/p' vs p'</option>
         </select>
+      </div>
+
+      <br>
+      <!-- Preset vs Custom Graph Selection -->
+      <div>
+        <input type="checkbox" id="custom-graph" name="custom_graph">
+        <label for="custom-graph">Custom Graph</label>
       </div>
       
       <!-- Custom X/Y Axis selection (hidden by default) -->
@@ -142,9 +145,9 @@
           <div id="y-axis-container">
             {% for column in y_axis_options %}
             {% if column == 'p' %}
-            <input type="checkbox" name="y_axis" value="{{ column }}" checked> p'<br>
+            <input type="checkbox" name="y_axis" value="{{ column }}" > p'<br>
             {% else %}
-            <input type="checkbox" name="y_axis" value="{{ column }}" checked> {{ column.replace('_', ' ').capitalize() }}<br>
+            <input type="checkbox" name="y_axis" value="{{ column }}" > {{ column.replace('_', ' ').capitalize() }}<br>
             {% endif %}
             {% endfor %}
           </div>
