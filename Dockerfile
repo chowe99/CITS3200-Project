@@ -1,21 +1,31 @@
 # Use an official Python runtime as a parent image
 FROM python:3.10-slim
 
+# Set environment variables to prevent Python from writing .pyc files and buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 # Set the working directory in the container
 WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Install any needed packages specified in requirements.txt
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port 5000 for the Flask app
-EXPOSE 5000
+# Copy and set permissions for the entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Define environment variable
-ENV FLASK_APP=app.py
+# Expose port 5123 for the Flask app
+EXPOSE 5123
 
-# Run the application
-CMD ["flask", "run", "--host=0.0.0.0"]
+# Run the entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]
 

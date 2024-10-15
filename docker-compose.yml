@@ -1,12 +1,27 @@
-version: '3.9'
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "5123:5123"
     volumes:
-      - .:/app
+      - ".:/app"
+      - "${NAS_MOUNT_PATH}:/mnt/irds"
     environment:
-      - FLASK_APP=app.py
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1  # Enable Flask debug mode
+      FLASK_APP: app.py
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      DATABASE_PATH: /mnt/irds/soil_tests.db
+      SMB_USERNAME: "${SMB_USERNAME}"
+      SMB_PASSWORD: "${SMB_PASSWORD}"
+      REAL_NAS: "${REAL_NAS:-true}"
+      LOCKFILE_PATH: "${LOCKFILE_PATH:-/mnt/irds/lock.lock}"  # Added environment variable
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5123"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  smb:
